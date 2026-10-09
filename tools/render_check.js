@@ -118,8 +118,46 @@ function describe(text) {
       continue;
     }
 
-    // Long enough for react-query to settle and charts to mount.
-    await new Promise((r) => setTimeout(r, 2500));
+    // Wait for the page to finish loading rather than sleeping a fixed amount.
+    //
+    // A fixed sleep made this measure the wrong thing: on one run /admin/nope
+    // measured 388 characters of text and on the next 986, because the data had
+    // not settled either time. Both cleared a `text > 40` floor, so the floor was
+    // catching almost nothing and a page stuck on skeletons would have passed.
+    // Skeleton rows are `aria-hidden` divs carrying `before:animate-shimmer`, so
+    // they can be waited on directly.
+    const settled = await (async () => {
+      const deadline = Date.now() + 12000;
+      let previous = -1;
+      for (;;) {
+        const state = await page.evaluate(() => {
+          const root = document.getElementById('root');
+          return {
+            textLen: root ? (root.textContent || '').trim().length : -1,
+            skeletons: document.querySelectorAll(
+              // Skeletons inside [data-skeleton-demo] are the style guide
+              // *displaying* skeletons as a specimen. They are content, not a
+              // loading state, and they never resolve -- counting them would
+              // report the style guide as a route whose data never arrived.
+              '[class*="animate-shimmer"]:not([data-skeleton-demo] [class*="animate-shimmer"])',
+            ).length,
+          };
+        });
+        // Settled means: skeletons gone, some text present, and the text length
+        // unchanged since the previous poll.
+        //
+        // Neither half is enough alone. "root has children and no skeletons" is
+        // true at t=0, before React has painted anything -- the shell div and an
+        // empty <section> are already there, 368 bytes with no text -- so that
+        // condition reported every route as a blank page. Waiting for the length
+        // to stop changing is what distinguishes "mounted" from "finished".
+        const stable = state.textLen > 0 && state.textLen === previous;
+        if (state.skeletons === 0 && stable) return true;
+        if (Date.now() > deadline) return false;
+        previous = state.textLen;
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    })();
 
     const probe = await page.evaluate(() => {
       const root = document.getElementById('root');
@@ -127,6 +165,9 @@ function describe(text) {
         children: root ? root.children.length : -1,
         textLen: root ? (root.textContent || '').trim().length : -1,
         htmlLen: root ? root.innerHTML.length : -1,
+        skeletons: document.querySelectorAll(
+          '[class*="animate-shimmer"]:not([data-skeleton-demo] [class*="animate-shimmer"])',
+        ).length,
       };
     });
 
@@ -135,6 +176,12 @@ function describe(text) {
     if (real.length) {
       failures.push(`${route}: ${real.map(describe).join(' | ')}`);
     }
+    if (!settled) {
+      failures.push(
+        `${route}: did not finish loading within 12s (${probe.skeletons} skeleton(s) left) ` +
+        '-- the route mounted but its data never arrived'
+      );
+    }
     if (probe.children <= 0 || probe.textLen < 40) {
       failures.push(
         `${route}: rendered nothing (children=${probe.children}, ` +
@@ -142,10 +189,11 @@ function describe(text) {
       );
     }
 
-    const bad = real.length > 0 || probe.textLen < 40;
+    const bad = real.length > 0 || probe.textLen < 40 || !settled;
     console.log(
       `${bad ? 'FAIL' : 'ok  '} ${route.padEnd(28)} ` +
       `text=${String(probe.textLen).padStart(5)}  html=${String(probe.htmlLen).padStart(6)}` +
+      (settled ? '' : `  skeletons=${probe.skeletons}`) +
       (real.length ? `  errors: ${real.length}` : '') +
       (http.length ? `  http>=400: ${http.join(', ')}` : '')
     );

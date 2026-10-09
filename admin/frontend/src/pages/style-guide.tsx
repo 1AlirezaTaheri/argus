@@ -227,15 +227,22 @@ export function StyleGuidePage(): JSX.Element {
         </div>
       </Section>
 
-      <Section title="Skeleton variants" description="line, circle, card, tableRow">
-        <div className="flex flex-wrap items-center gap-3">
-          <Skeleton className="w-40" />
-          <Skeleton variant="circle" />
-          <Skeleton variant="card" className="w-40" />
-        </div>
-        <TableSkeleton rows={2} cols={3} />
-        <CardSkeleton count={2} />
-      </Section>
+      {/* Marked so the render check can tell a real loading state from a specimen.
+          These skeletons are the *content* of this section and never resolve, so
+          without the marker tools/verify-render.sh reports the style guide as a
+          route whose data never arrived -- which is exactly what it should say
+          for any other page. */}
+      <div data-skeleton-demo="true">
+        <Section title="Skeleton variants" description="line, circle, card, tableRow">
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="w-40" />
+            <Skeleton variant="circle" />
+            <Skeleton variant="card" className="w-40" />
+          </div>
+          <TableSkeleton rows={2} cols={3} />
+          <CardSkeleton count={2} />
+        </Section>
+      </div>
 
       <Section title="Empty and error states">
         <div className="grid gap-3 lg:grid-cols-2">

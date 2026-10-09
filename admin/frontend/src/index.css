@@ -84,7 +84,21 @@
 [data-theme='light'] {
   --bg: 244 246 249; /* #f4f6f9 -- the page is grey so cards can be white */
   --surface: 255 255 255;
-  --elevated: 255 255 255;
+  /* An *inset* step, darker than the surface, not a raised one.
+
+     `bg-elevated` is the fill behind every hover state, icon chip, skeleton,
+     inline code span and tooltip -- around thirty call sites. When --elevated
+     was left at pure white alongside --surface, every one of them became
+     invisible on a white card in the light theme: no hover feedback, skeletons
+     that could not be seen, tooltips indistinguishable from the page behind
+     them.
+
+     In the dark theme elevation goes lighter, because near-black has room to.
+     White has nowhere to go, so in the light theme this token means "inset" and
+     lift comes from --shadow-lg instead. The name is kept because the call sites
+     all want "one step off the card surface", which is what it gives them in
+     both themes; only the direction of the step differs. */
+  --elevated: 241 245 249; /* #f1f5f9 */
   --input: 255 255 255;
   --border: 226 232 240; /* #e2e8f0 */
   --border-strong: 203 213 225; /* #cbd5e1 */

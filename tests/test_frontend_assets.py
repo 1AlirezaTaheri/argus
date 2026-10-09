@@ -223,3 +223,43 @@ class TestTheming:
                 f"{theme}: --border equals --elevated, so a bordered panel and a "
                 "raised control are indistinguishable"
             )
+
+    def test_elevated_differs_from_surface_in_both_themes(self) -> None:
+        """Every `bg-elevated` fill must be visible on a `--surface` card.
+
+        `bg-elevated` is the fill behind roughly thirty call sites: hover
+        states, icon chips, skeletons, inline code spans, tooltips and menus.
+        The light theme had `--elevated` and `--surface` both set to pure white,
+        so every one of them vanished on a white card -- no hover feedback,
+        skeletons you could not see, tooltips that looked like the page.
+
+        The step goes in opposite directions per theme (lighter on near-black,
+        darker on white), so this asserts only that a step exists.
+        """
+        blocks = _theme_token_blocks()
+        assert set(blocks) == {"dark", "light"}
+        for theme, body in blocks.items():
+            tokens = dict(
+                (name, tuple(int(x) for x in value.split()))
+                for name, value in re.findall(
+                    r"--([a-z-]+):\s*(\d+ \d+ \d+);", body
+                )
+            )
+            assert tokens["elevated"] != tokens["surface"], (
+                f"{theme}: --elevated equals --surface, so every bg-elevated fill "
+                "(hover states, icon chips, skeletons, tooltips) is invisible on "
+                "a card"
+            )
+
+    def test_elevated_is_used_on_a_surface_somewhere(self) -> None:
+        """Guards the guard: if bg-elevated stopped being used, the test above
+        would be asserting something no longer true."""
+        users = [
+            path
+            for path in SRC.rglob("*.tsx")
+            if "bg-elevated" in path.read_text(encoding="utf-8")
+        ]
+        assert len(users) >= 5, (
+            "bg-elevated is barely used any more, so the --elevated token check "
+            "may no longer describe anything that renders"
+        )

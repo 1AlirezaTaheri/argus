@@ -59,28 +59,47 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>
 
-/** Tiny inline sparkline; no chart library needed for four points. */
-function Sparkline({ values }: { values: number[] }): JSX.Element | null {
-  if (values.length < 2) return null
-  const max = Math.max(...values, 1)
-  const width = 64
-  const height = 18
-  const step = width / (values.length - 1)
-  const points = values
-    .map((value, index) => `${(index * step).toFixed(1)},${(height - (value / max) * height).toFixed(1)}`)
-    .join(' ')
-
+/**
+ * Scan outcomes for one target, as a proportion bar.
+ *
+ * This replaces a "sparkline" that was fed `[succeeded_count, scan_count]` and
+ * drawn as a polyline. That was not a time series: it was two aggregate scalars
+ * joined by a line. Because `scan_count` is always at least `succeeded_count`,
+ * the line sloped upward on *every* card, so the grid asserted growth that had
+ * not happened -- and the better the success rate, the flatter it looked, which
+ * is precisely backwards.
+ *
+ * The list endpoint returns no per-target daily series, and one timeline request
+ * per card would be the wrong trade for a grid. So the honest thing to draw from
+ * these two numbers is their proportion, which is what they actually mean.
+ */
+function OutcomeBar({
+  succeeded,
+  total,
+}: {
+  succeeded: number
+  total: number
+}): JSX.Element {
+  const failed = Math.max(0, total - succeeded)
+  if (total <= 0) {
+    return <span className="text-xs text-faint">no scans yet</span>
+  }
+  const pct = Math.round((succeeded / total) * 100)
   return (
-    <svg width={width} height={height} aria-hidden className="overflow-visible">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="rgb(var(--primary))"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
+    <div className="w-32">
+      <div
+        className="flex h-1.5 w-full overflow-hidden rounded-full bg-border"
+        role="img"
+        aria-label={`${succeeded} of ${total} scans succeeded, ${failed} failed`}
+      >
+        <div className="h-full bg-success" style={{ width: `${pct}%` }} />
+        {/* flex-1, not a fixed width: this segment is "whatever is left", and
+            without it a target with zero successes rendered an empty grey track
+            instead of a fully red one -- the exact case the bar exists to show. */}
+        {failed > 0 ? <div className="h-full flex-1 bg-danger" /> : null}
+      </div>
+      <p className="mt-1.5 text-[0.6875rem] text-muted">{pct}% succeeded</p>
+    </div>
   )
 }
 
@@ -293,14 +312,15 @@ export function TargetsPage(): JSX.Element {
                 </Button>
               </div>
 
-              <div className="mt-4 flex items-end justify-between">
+              <div className="mt-4 flex items-end justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-semibold tabular-nums text-fg">
-                    {formatNumber(target.scan_count)}
-                  </p>
-                  <p className="text-xs text-muted">scans</p>
+                  <p className="stat-value">{formatNumber(target.scan_count)}</p>
+                  <p className="mt-1 text-xs text-muted">scans</p>
                 </div>
-                <Sparkline values={[target.succeeded_count, target.scan_count]} />
+                <OutcomeBar
+                  succeeded={target.succeeded_count}
+                  total={target.scan_count}
+                />
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-1.5 text-xs">
