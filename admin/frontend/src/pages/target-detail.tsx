@@ -13,10 +13,18 @@ import {
   Trash2,
 } from 'lucide-react'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui'
+import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -55,52 +63,34 @@ import {
 import { DataTable, Pagination, type Column, type SortSpec } from '@/components/data-table'
 import { ScanButton } from '@/components/scan-button'
 import { Tabs, TabsContent } from '@/components/ui'
-
-const CHART_TOOLTIP = {
-  contentStyle: {
-    background: 'rgb(var(--elevated))',
-    border: '1px solid rgb(var(--border))',
-    borderRadius: 8,
-    fontSize: 12,
-    boxShadow: 'var(--shadow-md)',
-  },
-  labelStyle: { color: 'rgb(var(--fg))' },
-  cursor: { stroke: 'rgb(var(--border))' },
-} as const
-
-const AXIS_TICK = { fontSize: 11, fill: 'rgb(var(--muted))' } as const
-
-const CHANGE_COLORS: Record<string, string> = {
-  new_host: 'rgb(var(--success))',
-  new_port: 'rgb(var(--info))',
-  service_change: 'rgb(var(--warning))',
-  closed_port: 'rgb(var(--danger))',
-  closed_host: 'rgb(var(--muted))',
-}
-
-const CHANGE_LABELS: Record<string, string> = {
-  new_host: 'New host',
-  new_port: 'New port',
-  service_change: 'Service changed',
-  closed_port: 'Closed port',
-  closed_host: 'Closed host',
-}
+import {
+  AXIS_TICK,
+  CHANGE_COLORS,
+  CHANGE_LABELS,
+  CHART_TOOLTIP,
+  GRID,
+  SERIES,
+  dateTicks,
+  shortDate,
+  ticksForWidth,
+  useChartWidth,
+} from '@/lib/chart'
 
 function when(value: string | null | undefined): string {
-  if (!value) return 'â€”'
+  if (!value) return '—'
   try {
     return formatDistanceToNow(parseISO(value), { addSuffix: true })
   } catch {
-    return 'â€”'
+    return '—'
   }
 }
 
 function whenExact(value: string | null | undefined): string {
-  if (!value) return 'â€”'
+  if (!value) return '—'
   try {
     return format(parseISO(value), 'yyyy-MM-dd HH:mm')
   } catch {
-    return 'â€”'
+    return '—'
   }
 }
 
@@ -214,6 +204,59 @@ export function TargetDetailPage(): JSX.Element {
     })
   }
 
+  // Derived from the query above, so they are safe to compute during
+  // loading (empty arrays) -- which is also why they have to live above the
+  // early returns, not below them.
+  const allScans = scans.data?.scans ?? []
+  const filteredScans = allScans.filter((scan) => {
+    if (profileFilter !== 'all' && scan.profile !== profileFilter) return false
+    if (statusFilter !== 'all' && scan.status !== statusFilter) return false
+    return true
+  })
+
+  const profiles = [...new Set(allScans.map((s) => s.profile))].sort()
+  const statuses = [...new Set(allScans.map((s) => s.status))].sort()
+
+  // Both hooks below must stay above every early return. A hook called
+  // after a conditional return runs a different number of times across
+  // renders, which is React error #310 and blanks the whole page.
+  const sortedScans = React.useMemo(() => {
+    const [spec] = scanSort
+    if (!spec) return filteredScans
+    const dir = spec.direction === 'asc' ? 1 : -1
+    return [...filteredScans].sort((a, b) => {
+      const key = spec.key as keyof (typeof allScans)[number]
+      const av = a[key]
+      const bv = b[key]
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
+      return String(av ?? '').localeCompare(String(bv ?? '')) * dir
+    })
+  }, [filteredScans, scanSort, allScans])
+
+  React.useEffect(() => {
+    // A filter that shrinks the list can strand the user on a page that no
+    // longer exists, showing an empty table.
+    const maxPage = Math.max(1, Math.ceil(sortedScans.length / scanPageSize))
+    if (scanPage > maxPage) setScanPage(maxPage)
+  }, [sortedScans.length, scanPageSize, scanPage])
+
+  const pagedScans = sortedScans.slice(
+    (scanPage - 1) * scanPageSize,
+    scanPage * scanPageSize,
+  )
+
+  const series = timeline.data?.series ?? []
+
+  // Tick density follows the measured width so the axis does not collide on a
+  // phone. See lib/chart for why the ticks are chosen here rather than left to
+  // Recharts.
+  //
+  // Above every early return, for the same reason as the hooks below: a hook
+  // that runs only on the loaded render is React error #310, and this component
+  // is exactly where that mistake has already been made once.
+  const timelineBox = useChartWidth<HTMLDivElement>()
+  const maxTicks = ticksForWidth(timelineBox.width, series.length)
+
   if (invalidId) {
     return (
       <ErrorState
@@ -244,17 +287,6 @@ export function TargetDetailPage(): JSX.Element {
   }
 
   const target = detail.data
-  const series = timeline.data?.series ?? []
-
-  const allScans = scans.data?.scans ?? []
-  const filteredScans = allScans.filter((scan) => {
-    if (profileFilter !== 'all' && scan.profile !== profileFilter) return false
-    if (statusFilter !== 'all' && scan.status !== statusFilter) return false
-    return true
-  })
-
-  const profiles = [...new Set(allScans.map((s) => s.profile))].sort()
-  const statuses = [...new Set(allScans.map((s) => s.status))].sort()
 
   const scanColumns: Column<(typeof allScans)[number]>[] = [
     {
@@ -289,7 +321,7 @@ export function TargetDetailPage(): JSX.Element {
       header: 'Duration',
       cell: (row) =>
         row.duration_ms === null ? (
-          <span className="text-faint">â€”</span>
+          <span className="text-faint">—</span>
         ) : (
           <span className="tabular-nums">
             {row.duration_ms < 1000
@@ -334,31 +366,6 @@ export function TargetDetailPage(): JSX.Element {
     },
   ]
 
-  const sortedScans = React.useMemo(() => {
-    const [spec] = scanSort
-    if (!spec) return filteredScans
-    const dir = spec.direction === 'asc' ? 1 : -1
-    return [...filteredScans].sort((a, b) => {
-      const key = spec.key as keyof (typeof allScans)[number]
-      const av = a[key]
-      const bv = b[key]
-      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir
-      return String(av ?? '').localeCompare(String(bv ?? '')) * dir
-    })
-  }, [filteredScans, scanSort, allScans])
-
-  const pagedScans = sortedScans.slice(
-    (scanPage - 1) * scanPageSize,
-    scanPage * scanPageSize,
-  )
-
-  React.useEffect(() => {
-    // A filter that shrinks the list can strand the user on a page that no
-    // longer exists, showing an empty table.
-    const maxPage = Math.max(1, Math.ceil(sortedScans.length / scanPageSize))
-    if (scanPage > maxPage) setScanPage(maxPage)
-  }, [sortedScans.length, scanPageSize, scanPage])
-
   return (
     <div className="space-y-5">
       {/* --- header -------------------------------------------------- */}
@@ -397,7 +404,7 @@ export function TargetDetailPage(): JSX.Element {
               <TooltipContent>Copy</TooltipContent>
             </Tooltip>
             <span className="text-xs text-muted">
-              {formatNumber(target?.scan_count ?? 0)} scan(s) Â· added{' '}
+              {formatNumber(target?.scan_count ?? 0)} scan(s) · added{' '}
               {whenExact(target?.created_at)}
             </span>
           </div>
@@ -425,7 +432,13 @@ export function TargetDetailPage(): JSX.Element {
           <Button variant="outline" size="sm" onClick={() => void queryClient.invalidateQueries()}>
             Refresh
           </Button>
-          <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
+          {/* Tinted rather than solid red. As a solid fill this was the most
+              saturated object on the page -- louder than "Scan now", the action
+              it would destroy -- which inverts the hierarchy and puts the
+              destructive path under the most prominent button on screen. It
+              becomes a solid red fill inside the confirmation dialog instead,
+              where the user has already committed. */}
+          <Button variant="danger-soft" size="sm" onClick={() => setDeleteOpen(true)}>
             <Trash2 className="h-4 w-4" aria-hidden />
             Delete
           </Button>
@@ -467,7 +480,7 @@ export function TargetDetailPage(): JSX.Element {
       {/* --- timeline chart ------------------------------------------ */}
       <Card>
         <CardHeader>
-          <CardTitle>Activity â€” last {days} days</CardTitle>
+          <CardTitle>Activity — last {days} days</CardTitle>
           <div className="flex items-center gap-1" role="group" aria-label="Time window">
             {[7, 30, 90].map((option) => (
               <button
@@ -498,43 +511,75 @@ export function TargetDetailPage(): JSX.Element {
               description="This target has not been scanned in the selected window."
             />
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={series} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <CartesianGrid stroke="rgb(var(--border))" strokeDasharray="3 3" vertical={false} />
+            <div ref={timelineBox.ref}>
+              <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={series} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
+                <CartesianGrid {...GRID} />
                 <XAxis
                   dataKey="date"
                   tick={AXIS_TICK}
-                  tickFormatter={(value: string) => value.slice(5)}
+                  // Explicit tick positions. Recharts thinned the 30-day axis on
+                  // its own and dropped 09-23 from the middle, so the axis had a
+                  // visible gap that read as missing data rather than as a
+                  // deliberate omission.
+                  ticks={dateTicks(series.map((p) => p.date), maxTicks)}
+                  interval={0}
+                  tickFormatter={shortDate}
                   stroke="rgb(var(--border))"
+                  tickLine={false}
+                  // Each tick label is centred on its point, so the end labels
+                  // overhang the plot and get clipped. Padding insets the plot.
+                  padding={{ left: 16, right: 16 }}
                 />
-                <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" />
+                <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" tickLine={false} axisLine={false} width={34} />
                 <RTooltip {...CHART_TOOLTIP} />
+                {/* This chart had no legend at all: three coloured lines and
+                    nothing saying which was which. Colour alone was the only
+                    way to tell scans from failed scans from changes, which also
+                    means it carried no meaning for a reader who cannot
+                    distinguish the hues. */}
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 4 }}
+                  iconType="plainline"
+                  iconSize={14}
+                />
+                {/* `linear`, not `monotone`, for the same reason as the dashboard
+                    chart: a monotone spline overshoots between points, so with
+                    two active days in thirty the changes line arced up to 4 and
+                    back down, drawing activity that never happened. */}
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="scans"
                   name="scans"
-                  stroke="rgb(var(--primary))"
+                  stroke={SERIES.scans}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  strokeDasharray="0"
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="changes"
                   name="changes"
-                  stroke="rgb(var(--warning))"
+                  stroke={SERIES.changes}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  strokeDasharray="4 3"
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="failed"
                   name="failed"
-                  stroke="rgb(var(--danger))"
+                  stroke={SERIES.failed}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  strokeDasharray="1 3"
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -553,39 +598,49 @@ export function TargetDetailPage(): JSX.Element {
       >
         <TabsContent value="scans">
           <div className="mt-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-muted">
-                Profile
-                <select
-                  value={profileFilter}
-                  onChange={(event) => setProfileFilter(event.target.value)}
-                  aria-label="Filter by profile"
-                  className="rounded-md border border-input bg-bg px-2 py-1 text-xs text-fg outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
-                >
-                  <option value="all">all</option>
-                  {profiles.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-muted">
-                Status
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  aria-label="Filter by status"
-                  className="rounded-md border border-input bg-bg px-2 py-1 text-xs text-fg outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
-                >
-                  <option value="all">all</option>
-                  {statuses.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="flex flex-wrap items-end gap-3">
+              {/* The design-system Select, not a native <select>. The native one
+                  renders the platform's own dropdown chrome, so on the target
+                  page the only two OS-drawn controls on the screen sat directly
+                  under tabs and a chart built from Radix components. Radix also
+                  means the popup is themeable and keyboard-navigable with the
+                  same behaviour as every other menu here. */}
+              <div className="flex flex-col gap-1">
+                <label htmlFor="scan-profile" className="stat-label">
+                  Profile
+                </label>
+                <Select value={profileFilter} onValueChange={setProfileFilter}>
+                  <SelectTrigger id="scan-profile" aria-label="Filter by profile" className="h-8 w-40 text-xs">
+                    <SelectValue placeholder="All profiles" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All profiles</SelectItem>
+                    {profiles.map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {p}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="scan-status" className="stat-label">
+                  Status
+                </label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger id="scan-status" aria-label="Filter by status" className="h-8 w-40 text-xs">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {statuses.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <DataTable
@@ -632,7 +687,7 @@ export function TargetDetailPage(): JSX.Element {
                   <CardTitle>Port distribution</CardTitle>
                   {latestScan ? (
                     <span className="text-xs text-muted">
-                      scan #{latestScan.id} Â· {when(latestScan.started_at)}
+                      scan #{latestScan.id} · {when(latestScan.started_at)}
                     </span>
                   ) : null}
                 </CardHeader>
@@ -649,14 +704,16 @@ export function TargetDetailPage(): JSX.Element {
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart
                         data={hosts.data?.port_distribution ?? []}
-                        margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                        margin={{ top: 8, right: 0, left: 0, bottom: 0 }}
                       >
-                        <CartesianGrid
+                        <CartesianGrid {...GRID} />
+                        <XAxis
+                          dataKey="port"
+                          tick={AXIS_TICK}
                           stroke="rgb(var(--border))"
-                          strokeDasharray="3 3"
-                          vertical={false}
+                          tickLine={false}
+                          padding={{ left: 6, right: 6 }}
                         />
-                        <XAxis dataKey="port" tick={AXIS_TICK} stroke="rgb(var(--border))" />
                         <YAxis
                           tick={AXIS_TICK}
                           allowDecimals={false}
@@ -686,7 +743,7 @@ export function TargetDetailPage(): JSX.Element {
                       <Row label="Started" value={whenExact(latestScan.started_at)} />
                       <Row label="Duration"
                         value={latestScan.duration_ms === null
-                          ? 'â€”'
+                          ? '—'
                           : `${(latestScan.duration_ms / 1000).toFixed(1)} s`} />
                       <Row label="Hosts" value={formatNumber(latestScan.host_count)} />
                       <Row
@@ -786,7 +843,7 @@ export function TargetDetailPage(): JSX.Element {
                                             {svc.state}
                                           </Badge>
                                         </td>
-                                        <td className="py-1 text-fg">{svc.service_name ?? 'â€”'}</td>
+                                        <td className="py-1 text-fg">{svc.service_name ?? '—'}</td>
                                         <td className="py-1 text-muted">
                                           {svc.product ? (
                                             <>
@@ -794,7 +851,7 @@ export function TargetDetailPage(): JSX.Element {
                                               {svc.version ? ` ${svc.version}` : ''}
                                             </>
                                           ) : (
-                                            'â€”'
+                                            '—'
                                           )}
                                         </td>
                                       </tr>
@@ -850,7 +907,7 @@ export function TargetDetailPage(): JSX.Element {
                           </p>
                           {change.old_value || change.new_value ? (
                             <p className="truncate font-mono text-[11px] text-muted">
-                              {change.old_value ?? 'â€”'} â†’ {change.new_value ?? 'â€”'}
+                              {change.old_value ?? '—'} → {change.new_value ?? '—'}
                             </p>
                           ) : null}
                         </div>
@@ -890,7 +947,7 @@ export function TargetDetailPage(): JSX.Element {
               onClick={() => purge.mutate()}
               disabled={purge.isPending}
             >
-              {purge.isPending ? 'Deletingâ€¦' : 'Delete permanently'}
+              {purge.isPending ? 'Deleting…' : 'Delete permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

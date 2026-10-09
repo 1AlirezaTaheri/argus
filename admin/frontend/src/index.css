@@ -8,71 +8,116 @@
    The whole app reads these; Tailwind maps them to utility classes
    (bg-bg, text-fg, border-border, bg-primary, ...). Switching themes is
    therefore one attribute flip on <html>, not a re-render.
+
+   Three rules govern the values, and each one fixes something that was wrong:
+
+   1. Surfaces ascend in lightness: bg < surface < elevated. In the light theme
+      that means the page is the grey one and cards are white, so a card reads as
+      lifted off the page. It was the other way round -- white page, grey cards
+      -- which made every card look like a hole cut in the background.
+
+   2. --border is darker/lighter than --elevated and never equal to it. They were
+      literally the same value, so a bordered panel and a raised control were
+      indistinguishable and the whole UI flattened out.
+
+   3. Accents are tuned per theme rather than reused raw. A green that reads
+      well as a thin stroke on near-black is blinding as a filled button on
+      white, so each theme gets its own steps.
    --------------------------------------------------------------------------- */
 
 :root,
 [data-theme='dark'] {
-  --bg: 2 6 23; /* #020617 */
-  --surface: 15 23 42; /* #0f172a */
-  --elevated: 30 41 59; /* #1e293b */
-  --border: 30 41 59; /* #1e293b */
-  --input: 30 41 59;
-  --fg: 241 245 249; /* #f1f5f9 */
-  --muted: 148 163 184; /* #94a3b8 */
-  --faint: 100 116 139;
+  --bg: 9 12 20; /* #090c14 */
+  --surface: 18 23 34; /* #121722 */
+  --elevated: 28 35 49; /* #1c2331 */
+  --input: 28 35 49;
+  --border: 36 44 60; /* #242c3c -- distinct from --elevated */
+  --border-strong: 51 63 83; /* for focus, hover and active edges */
+  --fg: 233 239 247; /* #e9eff7 */
+  --muted: 141 155 175; /* #8d9baf */
+  --faint: 106 120 140; /* #6a788c */
 
   --primary: 16 185 129; /* #10b981 */
-  --primary-fg: 2 6 23;
-  --primary-soft: 6 78 59;
+  --primary-fg: 3 12 9;
+  --primary-soft: 8 76 58; /* tinted chip background */
+  /* One step darker than --primary, used as the hover fill. A separate token
+     rather than an opacity change, because opacity would dim the label with the
+     background and make the hovered button the least readable one. */
+  --primary-strong: 5 150 105;
 
-  --danger: 239 68 68; /* #ef4444 */
+  --danger: 244 108 108; /* softened from #ef4444 */
   --danger-fg: 255 255 255;
-  --danger-soft: 127 29 29;
+  --danger-soft: 122 40 42;
+  --danger-strong: 200 78 78;
 
-  --warning: 245 158 11; /* #f59e0b */
-  --warning-soft: 120 53 15;
+  --warning: 245 183 87;
+  --warning-soft: 116 62 18;
 
-  --info: 14 165 233; /* #0ea5e9 */
-  --info-soft: 12 74 110;
+  --info: 108 176 235;
+  --info-soft: 17 68 106;
 
-  /* Success is deliberately distinct from --primary. Both are green in the
-     dark theme, but the hues differ so a "succeeded" badge is not
-     indistinguishable from a "primary" one. In the light theme they are far
-     apart. */
-  --success: 34 197 94; /* #22c55e */
-  --success-soft: 20 83 45;
+  /* Success is deliberately distinct from --primary. Both are green in the dark
+     theme, but the hue differs so a "succeeded" badge is not mistaken for a
+     primary button. In the light theme they are far apart. */
+  --success: 74 205 138;
+  --success-soft: 20 84 46;
+
+  /* Chart series. Separate steps from the status colours because a chart needs
+     five hues that are distinguishable from each other, not five colours that
+     each mean something. All five clear 3:1 against their own theme's surface,
+     which is the contrast a 2px stroke needs to stay legible. */
+  --chart-1: 45 212 160; /* emerald */
+  --chart-2: 110 168 245; /* blue */
+  --chart-3: 245 183 87; /* amber */
+  --chart-4: 176 148 245; /* violet */
+  --chart-5: 236 132 176; /* pink */
+
+  /* Backdrop for dialogs: dark enough to read as a layer, not so dark that the
+     panel behind it disappears. */
+  --overlay: 3 6 12;
 
   /* Focus ring, referenced by every focus-visible utility so it is tunable in
      one place instead of a dozen. */
-  --ring: 16 185 129;
+  --ring: 52 211 153;
 }
 
 [data-theme='light'] {
-  --bg: 255 255 255; /* #ffffff */
-  --surface: 248 250 252; /* #f8fafc */
+  --bg: 244 246 249; /* #f4f6f9 -- the page is grey so cards can be white */
+  --surface: 255 255 255;
   --elevated: 255 255 255;
+  --input: 255 255 255;
   --border: 226 232 240; /* #e2e8f0 */
-  --input: 226 232 240;
+  --border-strong: 203 213 225; /* #cbd5e1 */
   --fg: 15 23 42; /* #0f172a */
-  --muted: 100 116 139; /* #64748b */
-  --faint: 148 163 184;
+  --muted: 71 85 105; /* #475569 */
+  --faint: 132 147 168;
 
   --primary: 5 150 105; /* #059669 */
   --primary-fg: 255 255 255;
   --primary-soft: 209 250 229;
+  --primary-strong: 4 120 87;
 
   --danger: 220 38 38; /* #dc2626 */
   --danger-fg: 255 255 255;
   --danger-soft: 254 226 226;
+  --danger-strong: 185 28 28;
 
-  --warning: 217 119 6;
-  --warning-soft: 254 243 199;
+  --warning: 194 120 12;
+  --warning-soft: 253 240 205;
 
-  --info: 2 132 199;
-  --info-soft: 224 242 254;
+  --info: 2 116 190;
+  --info-soft: 219 234 254;
 
   --success: 22 163 74; /* #16a34a */
   --success-soft: 220 252 231;
+
+  --chart-1: 5 150 105;
+  --chart-2: 37 99 235;
+  --chart-3: 194 120 12;
+  --chart-4: 124 58 237;
+  --chart-5: 219 39 119;
+
+  --overlay: 15 23 42;
 
   --ring: 5 150 105;
 }
@@ -82,7 +127,7 @@
 
    Separate from the theme colour blocks because a shadow is a composite value
    (colour + blur + spread), not a colour: it cannot be expressed as an RGB
-   triple and cannot be alpha-composed by Tailwind's `<alpha-value>` notation.
+   triple and cannot be alpha-composed by Tailwind's <alpha-value> notation.
 
    Dark theme: the surface is near-black, so a shadow needs a wider, softer
    falloff to be visible at all -- it reads as depth rather than a grey halo.
@@ -91,17 +136,18 @@
 
 :root,
 [data-theme='dark'] {
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
-  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
-  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.6);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-md: 0 6px 16px -4px rgb(0 0 0 / 0.55), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 24px 48px -12px rgb(0 0 0 / 0.68), 0 8px 16px -8px rgb(0 0 0 / 0.5);
   --shadow-glow: 0 0 0 1px rgb(var(--primary) / 0.35),
     0 0 16px -4px rgb(var(--primary) / 0.45);
 }
 
 [data-theme='light'] {
-  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.06);
-  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.1);
-  --shadow-lg: 0 12px 32px -8px rgb(15 23 42 / 0.14);
+  --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -2px rgb(15 23 42 / 0.05);
+  --shadow-lg: 0 20px 40px -12px rgb(15 23 42 / 0.14),
+    0 6px 12px -6px rgb(15 23 42 / 0.07);
   --shadow-glow: 0 0 0 1px rgb(var(--primary) / 0.4),
     0 0 14px -4px rgb(var(--primary) / 0.35);
 }
@@ -136,6 +182,12 @@ body {
   @apply bg-bg text-fg font-sans antialiased;
   margin: 0;
   min-height: 100vh;
+  /* Tabular figures by default. The dashboard refetches every 15s, and with
+     proportional digits a changing number shifts the glyph widths, so the
+     layout twitches on every poll. Monospace tables are worse. */
+  font-variant-numeric: tabular-nums;
+  /* Stop the iOS zoom-on-focus that a 16px minimum input size avoids. */
+  -webkit-text-size-adjust: 100%;
 }
 
 ::-webkit-scrollbar {
@@ -149,12 +201,27 @@ body {
   @apply rounded-full bg-border;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-faint;
+  background: rgb(var(--border-strong));
 }
 
 @layer components {
+  /* Panels. The shadow is what separates a card from the page now that the
+     surface colours are close together; without it the layout reads as flat
+     blocks of colour. */
   .card {
-    @apply rounded-lg border border-border bg-surface;
+    @apply rounded-lg border border-border bg-surface shadow-sm;
+  }
+
+  /* A card that navigates or acts. Lift on hover so the hit area is obvious,
+     and keep the transition short enough to feel like a response rather than
+     an animation. */
+  .card-interactive {
+    @apply transition-[box-shadow,border-color,transform] duration-150
+      hover:-translate-y-px hover:border-border-strong hover:shadow-md;
+  }
+
+  .card-interactive:active {
+    transform: translateY(0);
   }
 
   /* One focus treatment for the whole app. Every interactive element uses this
@@ -162,7 +229,7 @@ body {
      which was already drifting between near-identical spellings. */
   .focus-ring {
     @apply focus-visible:outline-none focus-visible:ring-2;
-    --tw-ring-color: rgb(var(--ring) / 0.45);
+    --tw-ring-color: rgb(var(--ring) / 0.55);
     --tw-ring-offset-color: rgb(var(--bg));
   }
 
@@ -170,7 +237,7 @@ body {
     @apply w-full rounded-md border border-input bg-bg px-3 py-2 text-sm text-fg
       outline-none transition-colors
       placeholder:text-faint
-      focus:border-primary focus:ring-2 focus:ring-primary/25
+      focus:border-border-strong focus:ring-2 focus:ring-primary/25
       disabled:cursor-not-allowed disabled:opacity-50;
   }
 
@@ -184,6 +251,23 @@ body {
 
   .link {
     @apply text-primary hover:underline;
+  }
+
+  /* Small all-caps label above a value. Letterspacing is the point: at 11px the
+     default tracking makes caps look like shouting rather than a category
+     label. */
+  .stat-label {
+    @apply text-[0.6875rem] font-medium uppercase tracking-wider text-muted;
+  }
+
+  /* The number in a stat tile. Tight negative tracking keeps a two-digit figure
+     from looking airy next to its label. */
+  .stat-value {
+    @apply text-[1.75rem] font-semibold leading-none tracking-tight text-fg;
+  }
+
+  .mono {
+    @apply font-mono text-[0.8125rem];
   }
 }
 

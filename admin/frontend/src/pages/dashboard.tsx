@@ -54,40 +54,26 @@ import {
   StatusDot,
 } from '@/components/feedback'
 import { KPICard } from '@/components/kpi-card'
+import {
+  AXIS_TICK,
+  CHANGE_COLORS,
+  CHANGE_LABELS,
+  CHART_TOOLTIP,
+  GRID,
+  SERIES,
+  dateTicks,
+  shortDate,
+  ticksForWidth,
+  useChartWidth,
+} from '@/lib/chart'
 
 /** How often the live panels refetch. */
 const REFRESH_MS = 15_000
 
-const CHANGE_COLORS: Record<string, string> = {
-  new_host: 'rgb(var(--success))',
-  new_port: 'rgb(var(--info))',
-  service_change: 'rgb(var(--warning))',
-  closed_port: 'rgb(var(--danger))',
-  closed_host: 'rgb(var(--muted))',
-}
-
-const CHANGE_LABELS: Record<string, string> = {
-  new_host: 'New host',
-  new_port: 'New port',
-  service_change: 'Service changed',
-  closed_port: 'Closed port',
-  closed_host: 'Closed host',
-}
-
-/** Shared tooltip styling, so every chart's hover looks the same. */
-const CHART_TOOLTIP = {
-  contentStyle: {
-    background: 'rgb(var(--elevated))',
-    border: '1px solid rgb(var(--border))',
-    borderRadius: 8,
-    fontSize: 12,
-    boxShadow: 'var(--shadow-md)',
-  },
-  labelStyle: { color: 'rgb(var(--fg))' },
-  cursor: { stroke: 'rgb(var(--border))' },
-} as const
-
-const AXIS_TICK = { fontSize: 11, fill: 'rgb(var(--muted))' } as const
+// Tooltip and axis styling moved to @/lib/chart, along with the series palette
+// and the tick-thinning helper. They were duplicated here and in
+// target-detail.tsx, which meant fixing the crowded 30-day axis in one page left
+// the other page wrong.
 
 function actionIcon(action: string): React.ReactNode {
   if (action.startsWith('auth')) return <ShieldCheck className="h-4 w-4" aria-hidden />
@@ -176,6 +162,13 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
 
   const data = stats.data
   const series = data?.series ?? []
+
+  // Tick density follows the measured width so the axis does not collide on a
+  // phone. See lib/chart for why the ticks are chosen here rather than left to
+  // Recharts.
+  const chartBox = useChartWidth<HTMLDivElement>()
+  const maxTicks = ticksForWidth(chartBox.width, series.length)
+
   const breakdown = useMemo(
     () =>
       Object.entries(data?.change_breakdown ?? {})
@@ -223,7 +216,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={refreshAll} disabled={isFetching}>
           <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} aria-hidden />
-          {isFetching ? 'Refreshingâ€¦' : 'Refresh'}
+          {isFetching ? 'Refreshing…' : 'Refresh'}
         </Button>
         <Link to="/targets">
           <Button size="sm" variant="outline">
@@ -248,10 +241,14 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
       </div>
 
       {/* --- stat tiles ------------------------------------------------- */}
+      {/* Two columns from the smallest screen, not one. A single column gave each
+          tile a full phone screen, so six tiles meant roughly 1500px of
+          scrolling to read six numbers -- and the numbers are the reason to open
+          the dashboard at all. */}
       {stats.isLoading ? (
         <CardSkeleton count={6} />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
           <KPICard
             label="Targets"
             value={data?.targets ?? 0}
@@ -293,7 +290,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Scan activity â€” last 7 days</CardTitle>
+            <CardTitle>Scan activity — last 7 days</CardTitle>
             <span className="text-xs text-muted">scans and change events per day</span>
           </CardHeader>
           <CardContent>
@@ -306,61 +303,82 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
                 description="Run a scan from Telegram with /scan and it will appear here."
               />
             ) : (
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={series} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+              <div ref={chartBox.ref}>
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={series} margin={{ top: 8, right: 0, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="fillScans" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity={0.02} />
-                    </linearGradient>
-                    <linearGradient id="fillFailed" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="rgb(var(--danger))" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="rgb(var(--danger))" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={SERIES.scans} stopOpacity={0.28} />
+                      <stop offset="100%" stopColor={SERIES.scans} stopOpacity={0.01} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="rgb(var(--border))" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid {...GRID} />
                   <XAxis
                     dataKey="date"
                     tick={AXIS_TICK}
-                    tickFormatter={(value: string) => value.slice(5)}
+                    ticks={dateTicks(series.map((p) => p.date), maxTicks)}
+                    interval={0}
+                    tickFormatter={shortDate}
                     stroke="rgb(var(--border))"
+                    tickLine={false}
+                    // Recharts centres each tick label on its data point, so the
+                    // first and last labels overhang the plot by half their width
+                    // and get clipped ("39-09"). Padding on the axis insets the
+                    // plot so both ends have room.
+                    padding={{ left: 16, right: 16 }}
                   />
-                  <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" />
+                  <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" tickLine={false} axisLine={false} width={34} />
                   <RTooltip {...CHART_TOOLTIP} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12, paddingTop: 4 }} iconType="plainline" iconSize={14} />
+                  {/* `linear`, not `monotone`. A monotone spline draws curves that
+                      overshoot between points: with two active days out of thirty
+                      the "changes" line arced up to 4 and back down, inventing
+                      activity on days that had none. Daily counts are discrete,
+                      so a straight segment between days is the honest shape. */}
                   <Area
-                    type="monotone"
+                    type="linear"
                     dataKey="scans"
                     name="scans"
-                    stroke="rgb(var(--primary))"
+                    stroke={SERIES.scans}
                     strokeWidth={2}
                     fill="url(#fillScans)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
                   />
-                  <Area
-                    type="monotone"
+                  {/* `failed` is a line, not a second filled area. Two
+                      translucent fills under overlapping curves stack into a
+                      muddy grey wash that reads as a third, unnamed series;
+                      only the primary series should own the filled region. */}
+                  <Line
+                    type="linear"
                     dataKey="failed"
                     name="failed"
-                    stroke="rgb(var(--danger))"
+                    stroke={SERIES.failed}
                     strokeWidth={2}
-                    fill="url(#fillFailed)"
+                    strokeDasharray="1 3"
+                    dot={false}
+                    activeDot={{ r: 4 }}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="changes"
                     name="changes"
-                    stroke="rgb(var(--warning))"
+                    stroke={SERIES.changes}
                     strokeWidth={2}
-                    dot={{ r: 2 }}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    activeDot={{ r: 4 }}
                   />
-                </AreaChart>
-              </ResponsiveContainer>
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Change types â€” last 7 days</CardTitle>
+            <CardTitle>Change types — last 7 days</CardTitle>
           </CardHeader>
           <CardContent>
             {stats.isLoading ? (
@@ -375,14 +393,16 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
               <>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={breakdown} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
-                    <CartesianGrid stroke="rgb(var(--border))" strokeDasharray="3 3" vertical={false} />
+                    <CartesianGrid {...GRID} />
                     <XAxis
                       dataKey="name"
                       tick={AXIS_TICK}
                       tickFormatter={(value: string) => CHANGE_LABELS[value] ?? value}
                       stroke="rgb(var(--border))"
+                      tickLine={false}
+                      padding={{ left: 8, right: 8 }}
                     />
-                    <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" />
+                    <YAxis tick={AXIS_TICK} allowDecimals={false} stroke="rgb(var(--border))" tickLine={false} axisLine={false} width={30} />
                     <RTooltip
                       {...CHART_TOOLTIP}
                       labelFormatter={(value: string) => CHANGE_LABELS[value] ?? value}
@@ -459,7 +479,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
                       <p className="text-xs text-muted">
                         {entry.created_at
                           ? formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })
-                          : 'â€”'}
+                          : '—'}
                       </p>
                     </div>
                     {entry.success ? (
@@ -584,9 +604,9 @@ function WorkerTile({
               <StatusDot ok={false} label="stopped" />
             )}
           </span>
-          {' Â· '}
+          {' · '}
           <span className="tabular-nums">{worker.queue_depth ?? 0}</span> queued
-          {worker.max_concurrency !== null ? ` Â· ${worker.max_concurrency} slot(s)` : ''}
+          {worker.max_concurrency !== null ? ` · ${worker.max_concurrency} slot(s)` : ''}
         </>
       }
     />

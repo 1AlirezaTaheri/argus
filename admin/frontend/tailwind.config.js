@@ -1,6 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ['class'],
+  // No `darkMode` entry on purpose.
+  //
+  // Theming is done with CSS custom properties on [data-theme], not with
+  // Tailwind's dark: variant, because every component reads semantic tokens
+  // (bg-surface, text-muted) that are redefined per theme -- so a theme flip is
+  // one attribute change, with no re-render and no duplicated class strings.
+  //
+  // This config previously declared darkMode: ['class'] while the app actually
+  // set data-theme. Nothing used a dark: variant so nothing broke, but it was a
+  // trap: the first person to write `dark:bg-zinc-900` would get no styling and
+  // no warning. If a real need for a dark: variant appears it must be keyed to
+  // the data-theme attribute, not `class`.
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
@@ -11,19 +22,28 @@ export default {
         surface: 'rgb(var(--surface) / <alpha-value>)',
         elevated: 'rgb(var(--elevated) / <alpha-value>)',
         border: 'rgb(var(--border) / <alpha-value>)',
+        // A second border step. --border alone was too quiet to mark hover,
+        // focus and active edges, which is why every interactive element used
+        // to reach for an arbitrary opacity instead.
+        'border-strong': 'rgb(var(--border-strong) / <alpha-value>)',
         input: 'rgb(var(--input) / <alpha-value>)',
         fg: 'rgb(var(--fg) / <alpha-value>)',
         muted: 'rgb(var(--muted) / <alpha-value>)',
         faint: 'rgb(var(--faint) / <alpha-value>)',
+        // Dialog and drawer backdrop.
+        overlay: 'rgb(var(--overlay) / <alpha-value>)',
         primary: {
           DEFAULT: 'rgb(var(--primary) / <alpha-value>)',
           fg: 'rgb(var(--primary-fg) / <alpha-value>)',
           soft: 'rgb(var(--primary-soft) / <alpha-value>)',
+          // The hover step for a filled primary button.
+          strong: 'rgb(var(--primary-strong) / <alpha-value>)',
         },
         danger: {
           DEFAULT: 'rgb(var(--danger) / <alpha-value>)',
           fg: 'rgb(var(--danger-fg) / <alpha-value>)',
           soft: 'rgb(var(--danger-soft) / <alpha-value>)',
+          strong: 'rgb(var(--danger-strong) / <alpha-value>)',
         },
         warning: {
           DEFAULT: 'rgb(var(--warning) / <alpha-value>)',
@@ -37,12 +57,38 @@ export default {
           DEFAULT: 'rgb(var(--success) / <alpha-value>)',
           soft: 'rgb(var(--success-soft) / <alpha-value>)',
         },
+        // Chart series palette. Exposed as `chart-1`..`chart-5` so a chart can
+        // be restyled from one place instead of each series naming a colour
+        // inline. These are distinct from the status colours above on purpose:
+        // the status hues each *mean* something, and a chart needs five that are
+        // merely distinguishable from one another.
+        chart: {
+          1: 'rgb(var(--chart-1) / <alpha-value>)',
+          2: 'rgb(var(--chart-2) / <alpha-value>)',
+          3: 'rgb(var(--chart-3) / <alpha-value>)',
+          4: 'rgb(var(--chart-4) / <alpha-value>)',
+          5: 'rgb(var(--chart-5) / <alpha-value>)',
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+        // 'Inter Variable' is the family name @fontsource-variable/inter
+        // actually declares in its @font-face. Asking for 'Inter' matches no
+        // face, so the browser leaves every one unloaded and never fetches the
+        // woff2 -- the panel silently renders in the fallback stack.
+        sans: [
+          'Inter Variable',
+          'Inter',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'sans-serif',
+        ],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {
+        // 2xl added for the large panels (dialogs, the mobile drawer) so they
+        // can read as a distinct surface layer from the cards inside them.
+        '2xl': '1rem',
         xl: '0.75rem',
         lg: '0.5rem',
         md: '0.375rem',

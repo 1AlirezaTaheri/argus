@@ -378,6 +378,17 @@ def _mount_mini_app(app: FastAPI) -> None:
 # proposed for this change, and it is deliberate -- a CSP that is not tested
 # against the real pages is not hardening, it is an outage.
 #
+# script-src carries a sha256 of the one inline script in the panel:
+# the anti-flash theme script in index.html, which must run before
+# React mounts or a light-theme user sees a flash of dark. A hash
+# allows exactly that script instead of 'unsafe-inline', which would
+# void the point of the header. The digest is of the script's text
+# content, so editing that script requires regenerating it:
+#
+#     'sha256-1d0a790749667855beae2f6f63422b5f77851011f7946a27310cf5b74ef62798'
+#
+# tools/verify-csp.py fails if the two ever drift apart.
+#
 # style-src carries 'unsafe-inline' because the login page sets an inline
 # background gradient through the style attribute.
 #
@@ -385,7 +396,7 @@ def _mount_mini_app(app: FastAPI) -> None:
 # anyone else's iframe (clickjacking).
 CSP = (
     "default-src 'self'; "
-    "script-src 'self' https://telegram.org; "
+    "script-src 'self' https://telegram.org 'sha256-1d0a790749667855beae2f6f63422b5f77851011f7946a27310cf5b74ef62798'; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; "
     "font-src 'self' data:; "

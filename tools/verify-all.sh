@@ -63,5 +63,9 @@ echo "=== verify mobile navigation ==="
 bash "$DIR/verify-mobile-nav.sh" 2>&1 | tail -25
 
 echo
+echo "=== verify every route actually renders in a browser ==="
+bash "$DIR/verify-render.sh" 2>&1 | tail -20
+
+echo
 fail=0
 echo "done"

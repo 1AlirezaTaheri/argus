@@ -123,6 +123,7 @@ export function StyleGuidePage(): JSX.Element {
           <Button variant="secondary">Secondary</Button>
           <Button variant="outline">Outline</Button>
           <Button variant="ghost">Ghost</Button>
+          <Button variant="danger-soft">Danger (tinted)</Button>
           <Button variant="danger">Danger</Button>
           <Button variant="link">Link</Button>
           <Button size="sm">Small</Button>
@@ -131,6 +132,46 @@ export function StyleGuidePage(): JSX.Element {
           <Button disabled>Disabled</Button>
         </div>
       </Card>
+
+      <Section
+        title="Chart series palette"
+        description="distinct from the status colours; every series also carries its own dash"
+      >
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(
+            [
+              ['chart-1', 'scans'],
+              ['chart-2', 'hosts'],
+              ['chart-3', 'changes'],
+              ['chart-4', 'services'],
+              ['chart-5', 'reserved'],
+              ['danger', 'failed'],
+            ] as const
+          ).map(([token, use]) => (
+            <div key={token} className="flex items-center gap-3 rounded-md border border-border bg-surface p-3">
+              {/* The dash is drawn as an SVG so the guide shows the actual
+                  encoding a chart uses, not a rectangle. */}
+              <svg width="44" height="12" aria-hidden className="shrink-0">
+                <line
+                  x1="1"
+                  y1="6"
+                  x2="43"
+                  y2="6"
+                  stroke={`rgb(var(--${token}))`}
+                  strokeWidth="2"
+                  strokeDasharray={
+                    token === 'danger' ? '1 3' : token === 'chart-3' ? '4 3' : '0'
+                  }
+                />
+              </svg>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">--{token}</p>
+                <p className="text-xs text-muted">{use}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
 
       <Section title="Card variants" description="default, bordered, elevated, interactive">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

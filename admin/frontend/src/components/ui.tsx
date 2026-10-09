@@ -16,16 +16,31 @@ import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ' +
-    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ' +
+    'transition-[background-color,border-color,color,box-shadow] duration-150 ' +
+    // The shared .focus-ring, so the ring colour is tuned once per theme
+    // instead of the ring-primary/40 that had drifted between variants.
+    'focus-ring ' +
     'disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-fg hover:opacity-90',
-        secondary: 'bg-elevated text-fg hover:bg-border',
-        outline: 'border border-border bg-transparent text-fg hover:bg-elevated',
+        // Hover steps to a dedicated --primary-strong instead of dropping
+        // opacity: opacity dimmed the label along with the fill, so the hovered
+        // button had *worse* contrast than the resting one.
+        default: 'bg-primary text-primary-fg hover:bg-primary-strong',
+        secondary: 'bg-elevated text-fg hover:border-border-strong',
+        outline: 'border border-border-strong bg-transparent text-fg hover:bg-elevated',
         ghost: 'text-muted hover:bg-elevated hover:text-fg',
-        danger: 'bg-danger text-danger-fg hover:opacity-90',
+        // Solid, for the confirming action once the user is already inside the
+        // dialog and has committed.
+        danger: 'bg-danger text-danger-fg hover:bg-danger-strong',
+        // Tinted, for the trigger that opens the confirmation. A solid red
+        // "Delete" sitting in the page header was the most saturated object on
+        // screen -- louder than the primary action it could destroy -- which
+        // inverts the hierarchy and makes the destructive path the most
+        // clickable-looking one.
+        'danger-soft':
+          'border border-danger/40 bg-danger-soft text-danger hover:border-danger/70',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
@@ -185,13 +200,13 @@ export function PopoverContent({
 /* Card variants                                                              */
 /* -------------------------------------------------------------------------- */
 
-const cardVariants = cva('rounded-lg transition-colors', {
+const cardVariants = cva('rounded-lg', {
   variants: {
     variant: {
       // Flat surface, no edge. Quietest; for stacked content where the
       // background alone separates the block.
       default: 'border border-transparent bg-surface',
-      // The default look today: an explicit edge, no shadow.
+      // The default look: an explicit edge, with the shared card shadow.
       bordered: 'border border-border bg-surface',
       // Lifted: a shadow instead of relying on the border. Used for panels
       // that sit above the page (dropdowns, floating cards).
@@ -199,9 +214,12 @@ const cardVariants = cva('rounded-lg transition-colors', {
       // Clickable surface. Adds the hover/focus affordances a button would,
       // and only when the caller passes an onClick -- otherwise a card that
       // looks clickable but is not is a dark pattern.
+      //
+      // Lifts on hover rather than only tinting the border: with the new token
+      // values a border-colour change alone was too subtle to register as
+      // feedback.
       interactive:
-        'cursor-pointer border border-border bg-surface hover:border-primary/50 hover:bg-elevated ' +
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        'card-interactive cursor-pointer border border-border bg-surface focus-ring',
     },
   },
   defaultVariants: { variant: 'bordered' },

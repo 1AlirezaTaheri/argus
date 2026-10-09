@@ -55,7 +55,7 @@ export function ScanButton({
     onSuccess: (result) => {
       toast.success(
         `Scan queued for ${result.target}`,
-        { description: `profile ${result.profile} Â· job ${result.job_id}` },
+        { description: `profile ${result.profile} · job ${result.job_id}` },
       )
       onQueued?.(result.job_id)
       void queryClient.invalidateQueries({ queryKey: ['target', targetId] })
@@ -95,7 +95,7 @@ export function ScanButton({
       ) : (
         <ScanLine className="h-4 w-4" aria-hidden />
       )}
-      <span>{pending ? 'Queueingâ€¦' : busy ? 'Scanning' : 'Scan now'}</span>
+      <span>{pending ? 'Queueing…' : busy ? 'Scanning' : 'Scan now'}</span>
       {busy ? (
         <Badge variant="info" className="ml-1">
           {running.profile}
@@ -128,7 +128,7 @@ export function ScanStatusDot({
   return (
     <span
       className={cn('inline-flex items-center gap-1 text-[11px] text-info', className)}
-      title={`${scan.status} Â· profile ${scan.profile}`}
+      title={`${scan.status} · profile ${scan.profile}`}
     >
       <Radio className="h-3 w-3 animate-pulse" aria-hidden />
       <span className="sr-only">Scan in progress</span>
