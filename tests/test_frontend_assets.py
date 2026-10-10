@@ -6,7 +6,10 @@ or the built CSS rather than in Python or in the component graph:
 
 * the CSP allowed the anti-flash theme script by neither hash nor
   ``unsafe-inline``, so the browser refused to run it and the whole app rendered
-  in the HTML's default theme until React mounted;
+  in the HTML's default theme until React mounted. A follow-up attempt to allow
+  it by hash was also wrong, and wrong *silently*: a browser hashes the script
+  element's complete child text, whitespace included, so a digest of the tidied
+  body never matches and the script never runs. The script is now a file;
 * ``index.html`` linked Inter from ``fonts.googleapis.com``, which the CSP blocks
   (``style-src 'self'``) and which is unreachable from Iran, so the declared font
   silently never loaded anywhere;
@@ -49,43 +52,101 @@ MOJIBAKE = {
 
 
 def inline_theme_script() -> str:
-    """The text content of the one inline ``<script>`` in index.html."""
+    """Deprecated helper, kept only so the failure message below reads clearly.
+
+    The panel used to carry its pre-paint theme script inline. It no longer does,
+    and the tests assert that instead -- see TestNoInlineScript.
+    """
     index = INDEX.read_text(encoding="utf-8")
     match = re.search(r"<script>\n(?P<body>.*?)\n\s*</script>", index, re.DOTALL)
-    assert match is not None, "the anti-flash theme script is missing from index.html"
-    return match.group("body")
+    return match.group("body") if match else ""
+
+
+class TestNoInlineScript:
+    """The panel must not have any inline script at all.
+
+    This is the real invariant, and it is stronger and more durable than the hash
+    check that preceded it.
+
+    The theme script was inline once, and the CSP allowed it by sha256. A browser
+    hashes the script element's *complete* child content -- the newline after
+    `<script>` and the indentation before `</script>` included. The CSP held the
+    digest of the tidied body, so on every page the browser demanded a different
+    hash and refused to execute it. Nothing failed: no build error, no exception,
+    no failing test, because the test also hashed the tidied body. The only
+    symptom was one console line and a theme that was never applied before first
+    paint.
+
+    So: the script now lives in public/theme.js and the hash is gone. These
+    cases keep it gone and keep the replacement in place.
+    """
+
+    def test_index_html_has_no_inline_script(self) -> None:
+        markup = _index_markup()
+        inline = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", markup)
+        assert not inline, (
+            f"index.html has an inline script: {inline}. Under script-src 'self' "
+            "with no 'unsafe-inline' it would need a sha256 of its complete child "
+            "text, which silently rots when the build tool reformats the HTML."
+        )
+
+    def test_theme_script_shipped_and_referenced(self) -> None:
+        index = INDEX.read_text(encoding="utf-8")
+        assert 'src="/theme.js"' in index, (
+            "index.html no longer loads the anti-flash theme script; a "
+            "light-theme user gets a flash of the dark background"
+        )
+        script = FRONTEND / "public/theme.js"
+        assert script.exists(), f"{script} is referenced but does not exist"
+        body = script.read_text(encoding="utf-8")
+        assert "data-theme" in body, "theme.js never sets data-theme"
+        assert "ns-theme" in body, "theme.js never reads the stored preference"
+
+    def test_theme_script_is_not_deferred(self) -> None:
+        """A module or a defer/async attribute would run after first paint."""
+        index = INDEX.read_text(encoding="utf-8")
+        tag = re.search(r"<script[^>]*theme\.js[^>]*>", index)
+        assert tag is not None
+        attrs = tag.group(0)
+        assert 'type="module"' not in attrs, (
+            "theme.js is loaded as a module, which defers it until after the "
+            "document is parsed -- too late to prevent the flash"
+        )
+        for attr in ("defer", "async"):
+            assert attr not in attrs, (
+                f"theme.js has {attr}, so it may run after first paint"
+            )
 
 
 class TestCspAllowsTheThemeScript:
-    """The theme script must be allowed by hash, or it silently never runs."""
+    """The theme script is a file, so the header has nothing to allow by hash."""
 
-    def test_csp_hash_matches_the_inline_script(self) -> None:
-        expected = "sha256-" + hashlib.sha256(
-            inline_theme_script().encode("utf-8")
-        ).hexdigest()
-
+    def test_csp_carries_no_stale_hash(self) -> None:
         boot = BOOTSTRAP.read_text(encoding="utf-8")
-        found = re.search(r"'sha256-([0-9a-f]{64})'", boot)
-        assert found is not None, "the CSP carries no sha256 for the inline script"
-        assert f"sha256-{found.group(1)}" == expected, (
-            "the CSP hash is stale: it no longer matches the script in "
-            "index.html, so the browser will refuse to run the theme script and "
-            "light-theme users get a flash of the dark background"
+        stale = re.findall(r"'sha256-[0-9a-f]{64}'", boot)
+        assert not stale, (
+            f"the CSP still carries {stale}, but no inline script remains for it "
+            "to allow. A digest nobody verifies rots; delete it rather than "
+            "correct it."
         )
 
     def test_script_src_does_not_permit_unsafe_inline(self) -> None:
-        # A hash is only meaningful if 'unsafe-inline' is absent. Allowing it
-        # would silently re-open script injection and make the hash decorative.
+        # A hash or a file is only meaningful if 'unsafe-inline' is absent.
+        # Allowing it would silently re-open script injection.
         boot = BOOTSTRAP.read_text(encoding="utf-8")
         match = re.search(r'"script-src ([^"]*)"', boot)
         assert match is not None
         assert "unsafe-inline" not in match.group(1), (
-            "script-src permits unsafe-inline, which voids the hash"
+            "script-src permits unsafe-inline, which voids the hardening"
+        )
+        assert "https://telegram.org" in match.group(1), (
+            "script-src no longer names telegram.org, which the Mini App WebApp "
+            "SDK needs"
         )
 
     def test_no_inline_event_handlers_in_index(self) -> None:
-        index = INDEX.read_text(encoding="utf-8")
-        handlers = re.findall(r"\son(?:click|load|error|submit|change)\s*=", index)
+        markup = _index_markup()
+        handlers = re.findall(r"\son(?:click|load|error|submit|change)\s*=", markup)
         assert not handlers, f"index.html has inline event handlers: {handlers}"
 
 
@@ -163,6 +224,17 @@ class TestSourceEncoding:
             f"{relative} has no non-ASCII characters left, which suggests the "
             "encoding repair flattened it"
         )
+
+
+def _index_markup() -> str:
+    """index.html with HTML comments removed.
+
+    The comment above the theme script *documents* the inline-script problem, so
+    it necessarily contains the literal text ``<script>`` twice. Scanning the raw
+    file finds those two and reports them as inline scripts -- the check failing
+    because of its own explanation.
+    """
+    return re.sub(r"<!--.*?-->", "", INDEX.read_text(encoding="utf-8"), flags=re.DOTALL)
 
 
 def _strip_js_comments(text: str) -> str:

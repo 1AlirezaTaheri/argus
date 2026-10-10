@@ -14,6 +14,11 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Tabs,
   TabsContent,
   Tooltip,
@@ -256,11 +261,62 @@ export function StyleGuidePage(): JSX.Element {
         </div>
       </Section>
 
-      <Section title="Tabs" description="Radix. Arrow keys, Home/End">
-        <Tabs items={[{ value: 'overview', label: 'Overview', count: 12 }, { value: 'hosts', label: 'Hosts' }, { value: 'ports', label: 'Ports', disabled: true }]}>
+      <Section
+        title="Select"
+        description="Radix. Type-ahead, Home/End, Escape, and a themed popup"
+      >
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sg-select" className="stat-label">
+              A choice
+            </label>
+            <Select defaultValue="b">
+              <SelectTrigger id="sg-select" className="w-56">
+                <SelectValue placeholder="Pick one" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="a">First option</SelectItem>
+                <SelectItem value="b">Second option</SelectItem>
+                <SelectItem value="c" disabled>
+                  Third option (disabled)
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="stat-label">Disabled</span>
+            <Select defaultValue="a" disabled>
+              <SelectTrigger aria-label="A disabled select" className="w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="a">Cannot be changed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted">
+          Every dropdown in the panel uses this. Five native select elements were
+          left in place &mdash; the audit filters, the settings controls and the
+          table's page-size picker &mdash; and each one opened the operating
+          system's own popup list, which cannot be themed and ignored the panel's
+          focus ring. The page-size picker sits inside the DataTable demo below,
+          so it was the one mismatch a reader of this page could not avoid.
+        </p>
+      </Section>
+
+      <Section
+        title="Tabs"
+        description="Radix. Arrow keys, Home/End. The third tab is disabled: dimmed, and it does not respond."
+      >
+        <Tabs items={[{ value: 'overview', label: 'Overview', count: 12 }, { value: 'hosts', label: 'Hosts' }, { value: 'ports', label: 'Ports (disabled)', disabled: true }]}>
           <TabsContent value="overview" className="py-3 text-sm text-muted">Overview panel</TabsContent>
           <TabsContent value="hosts" className="py-3 text-sm text-muted">Hosts panel</TabsContent>
         </Tabs>
+        <p className="mt-2 text-xs text-muted">
+          A disabled tab has no panel, so clicking it does nothing. Its label says
+          so, because a tab that silently ignores clicks reads as broken.
+        </p>
       </Section>
 
       <Section title="Accordion" description="disclosure with a height transition, no measurement">

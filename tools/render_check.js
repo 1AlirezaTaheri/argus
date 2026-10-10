@@ -73,7 +73,15 @@ function describe(text) {
   page.on('console', (m) => {
     if (m.type() === 'error') {
       const t = m.text();
-      if (/Content Security Policy|fonts\.googleapis|net::ERR/.test(t)) return;
+      // A Content Security Policy violation is NOT filtered out here.
+      //
+      // It used to be, and that is precisely how the anti-flash theme script went
+      // unnoticed for so long: the header carried a sha256 that never matched,
+      // every page logged "Refused to execute inline script", the script never
+      // ran, and the check reported every route healthy. A blocked script is a
+      // real defect with a real symptom (a flash of the wrong theme), so it
+      // fails the run like any other error.
+      if (/fonts\.googleapis|net::ERR_/.test(t)) return;
       // Chrome logs every non-2xx response as a console error. On
       // /admin/targets/999999 that 404 is the correct answer -- the route
       // deliberately asks for a target that does not exist so the error state

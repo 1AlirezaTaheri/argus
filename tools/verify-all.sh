@@ -67,5 +67,13 @@ echo "=== verify every route actually renders in a browser ==="
 bash "$DIR/verify-render.sh" 2>&1 | tail -20
 
 echo
+echo "=== verify the theme is applied before first paint ==="
+bash "$DIR/verify-theme.sh" 2>&1 | tail -16
+
+echo
+echo "=== verify the dropdowns work ==="
+bash "$DIR/verify-selects.sh" 2>&1 | tail -22
+
+echo
 fail=0
 echo "done"

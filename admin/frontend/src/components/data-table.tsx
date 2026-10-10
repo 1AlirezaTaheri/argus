@@ -12,7 +12,18 @@ import {
 import { cn, formatNumber } from '@/lib/utils'
 import { Card } from './ui'
 import { TableSkeleton, EmptyState } from './feedback'
-import { Button, Popover, PopoverContent, PopoverTrigger, Checkbox } from './ui'
+import {
+  Button,
+  Checkbox,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui'
 
 export type SortDirection = 'asc' | 'desc'
 
@@ -143,21 +154,30 @@ export function Pagination({
 
       <div className="flex items-center gap-2">
         {onPageSizeChange ? (
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            <span className="sr-only sm:not-sr-only">Rows</span>
-            <select
-              value={pageSize}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              aria-label="Rows per page"
-              className="rounded-md border border-input bg-bg px-2 py-1 text-xs text-fg outline-none focus:border-primary focus:ring-2 focus:ring-primary/25"
+          // The design-system Select, not a native <select>. A native one draws
+          // the platform's own dropdown, which cannot be themed and ignores the
+          // focus ring. This control sits at the end of the table's own toolbar,
+          // so the OS chrome was the only part of it that did not match the
+          // panel -- and it is the control the style guide's DataTable demo
+          // shows, so it was the one place the mismatch was unavoidable to miss.
+          <>
+            <span className="sr-only text-xs text-muted sm:not-sr-only">Rows</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(v) => onPageSizeChange(Number(v))}
             >
-              {pageSizeOptions.map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </label>
+              <SelectTrigger aria-label="Rows per page" className="h-8 w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
         ) : null}
 
         <nav className="flex items-center gap-1" aria-label="Pagination">

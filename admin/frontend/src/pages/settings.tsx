@@ -5,7 +5,20 @@ import { formatDistanceToNow } from 'date-fns'
 import { toast } from 'sonner'
 import { api, type SettingInfo, type SettingsResponse } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui'
 import { ErrorState, Skeleton } from '@/components/feedback'
 
 interface Section {
@@ -106,28 +119,33 @@ function SettingRow({
 
         <div className="flex shrink-0 items-center gap-2">
           {choices ? (
-            <select
-              id={name}
-              className="input h-8 w-44 text-xs"
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-            >
-              {choices.map((choice) => (
-                <option key={choice.value} value={choice.value}>
-                  {choice.label}
-                </option>
-              ))}
-            </select>
+            // Design-system Select, not a native <select>: a native one opens
+            // the platform's own popup list, which cannot be themed and ignored
+            // the panel's focus ring. These are the setting controls, so they
+            // are the last place an OS-drawn control can be mistaken for one of
+            // ours.
+            <Select value={value} onValueChange={onChange}>
+              <SelectTrigger id={name} aria-label={name} className="h-8 w-44 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {choices.map((choice) => (
+                  <SelectItem key={choice.value} value={choice.value}>
+                    {choice.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           ) : isBool ? (
-            <select
-              id={name}
-              className="input h-8 w-24 text-xs"
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-            >
-              <option value="true">true</option>
-              <option value="false">false</option>
-            </select>
+            <Select value={value} onValueChange={onChange}>
+              <SelectTrigger id={name} aria-label={name} className="h-8 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="true">true</SelectItem>
+                <SelectItem value="false">false</SelectItem>
+              </SelectContent>
+            </Select>
           ) : (
             <Input
               id={name}

@@ -16,8 +16,32 @@ import {
 } from 'lucide-react'
 import { api, type AuditEntry, type AuditFilters } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { Badge, Button, Card, Input } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui'
 import { EmptyState, Skeleton, StatusDot } from '@/components/feedback'
+
+/**
+ * Sentinel for "no filter" in the two Selects below.
+ *
+ * The API represents "no filter" as the empty string, and Radix's Select cannot
+ * use one: an empty value on Select.Item is reserved for the trigger's "nothing
+ * selected" state, so such an item cannot be chosen and the trigger renders
+ * blank once it is. Translating at the Select boundary keeps the query and the
+ * API on the empty string they already use.
+ *
+ * Deliberately not a plausible value: it is a control sentinel, and an action
+ * actually called "__any__" would silently become unfilterable.
+ */
+const ANY = '__any__'
 
 const ACTIONS = [
   'auth.login',
@@ -137,35 +161,52 @@ export function AuditPage(): JSX.Element {
             <label className="mb-1 block text-xs text-muted" htmlFor="f-action">
               Action
             </label>
-            <select
-              id="f-action"
-              className="input h-8 text-xs"
-              value={action}
-              onChange={(event) => setAction(event.target.value)}
+            {/* The design-system Select, not a native <select>: a native one opens
+                the platform's own popup list, which cannot be themed and ignored
+                the panel's focus ring. Radix also gives the same keyboard
+                behaviour as every other menu here.
+
+                The "no filter" option needs a sentinel rather than the empty
+                string. Radix forbids an empty value on Select.Item -- it is the
+                value the trigger shows when nothing is selected -- so an item
+                with value="" cannot be chosen and leaves the trigger blank. The
+                API still expects "" for "no filter", so the sentinel is
+                translated at this boundary and nowhere else. */}
+            <Select
+              value={action === '' ? ANY : action}
+              onValueChange={(v) => setAction(v === ANY ? '' : v)}
             >
-              <option value="">all actions</option>
-              {ACTIONS.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="f-action" aria-label="Filter by action" className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>all actions</SelectItem>
+                {ACTIONS.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
             <label className="mb-1 block text-xs text-muted" htmlFor="f-success">
               Result
             </label>
-            <select
-              id="f-success"
-              className="input h-8 text-xs"
-              value={success}
-              onChange={(event) => setSuccess(event.target.value)}
+            <Select
+              value={success === '' ? ANY : success}
+              onValueChange={(v) => setSuccess(v === ANY ? '' : v)}
             >
-              <option value="">all results</option>
-              <option value="true">success only</option>
-              <option value="false">failures only</option>
-            </select>
+              <SelectTrigger id="f-success" aria-label="Filter by result" className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ANY}>all results</SelectItem>
+                <SelectItem value="true">success only</SelectItem>
+                <SelectItem value="false">failures only</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div>
