@@ -18,21 +18,38 @@ from telegram import (
     WebAppInfo,
 )
 
+from bot.tunnel_url import resolve_miniapp_url
 from core.miniapp_auth import is_miniapp_enabled, mini_app_url
 
 log = logging.getLogger(__name__)
 
 
+def resolved_url(settings) -> str:
+    """The Mini App base URL, preferring the live tunnel over the setting.
+
+    Read through here rather than from ``settings.miniapp_url`` directly, because
+    a quick tunnel's hostname changes on every restart and the setting does not
+    follow it.
+    """
+    return resolve_miniapp_url(getattr(settings, "miniapp_url", "")) or ""
+
+
 def is_configured(settings) -> bool:
-    """Whether Mini App affordances should be shown at all."""
-    return is_miniapp_enabled(getattr(settings, "miniapp_url", ""))
+    """Whether Mini App affordances should be shown at all.
+
+    Deliberately tested against the *resolved* URL. A stale setting still begins
+    with https://, so testing the setting alone kept returning True and the bot
+    kept advertising a button that opened a hostname that no longer resolved.
+    """
+    return is_miniapp_enabled(resolved_url(settings))
 
 
 def app_url(settings, start_param: str | None = None) -> str:
     """The Mini App URL, or "" when not configured."""
-    if not is_configured(settings):
+    base = resolved_url(settings)
+    if not is_miniapp_enabled(base):
         return ""
-    return mini_app_url(settings.miniapp_url, start_param)
+    return mini_app_url(base, start_param)
 
 
 def web_app_info(settings) -> WebAppInfo | None:

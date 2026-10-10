@@ -6,6 +6,10 @@
     <meta name="color-scheme" content="dark light" />
     <meta name="robots" content="noindex, nofollow" />
     <title>NetSentinel Admin</title>
+    <!-- A 404 here is logged by the browser as a console error on every
+         load, which made "is this page clean" unanswerable without
+         filtering it by hand. Same origin, so CSP img-src 'self' covers it. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--
       Applied before React mounts so a light-theme user never sees a flash of
       the dark background. A separate file rather than an inline <script>: the
