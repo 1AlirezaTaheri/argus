@@ -21,21 +21,52 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from core.profiles import PROFILES, profile_names
 from database.models import SystemSetting
 
 log = logging.getLogger(__name__)
+
+
+def _profile_choice_kind() -> str:
+    """The `choice:` kind for the profile settings, built from the registry.
+
+    Each option carries the profile's description and is flagged when its port
+    set is not knowable, because that decides whether an `allow_port` /
+    `deny_port` rule can apply to a scan run with it -- the question this
+    whole change exists to answer, and one the name alone cannot.
+
+    Only the first sentence of the description is used, and commas are dropped:
+    the kind is comma-separated, so punctuation in an operator-facing label
+    would otherwise break the setting rather than decorate it.
+    """
+    options = []
+    for name in profile_names():
+        profile = PROFILES[name]
+        label = profile.description.split(".")[0].replace(",", "")
+        if not profile.describes_ports():
+            label += " - port rules cannot apply"
+        options.append(f"{name}:{label}")
+    # Entries are separated by commas -- that is what _parse_choice splits on.
+    # `|` separates a label from its longer description, so it cannot also be
+    # doing this job.
+    return "choice:" + ",".join(options)
+
+
+# Built once at import: PROFILES is a module-level constant, so this cannot go
+# stale without the module itself being reloaded.
+PROFILE_CHOICES = _profile_choice_kind()
 
 # key -> (default, kind, description)
 # "kind" drives coercion and validation on write.
 SETTING_SPECS: dict[str, tuple[Any, str, str]] = {
     "bot_language": ("fa", "choice:fa,en", "Language used by the Telegram bot"),
-    "default_profile": ("service", "choice:quick,service,deep", "Profile used when none given"),
+    "default_profile": ("service", PROFILE_CHOICES, "Profile used when none given"),
     "rate_limit_seconds": (30, "int:1:3600", "Min seconds between scans of one target"),
     "retention_days": (30, "int:1:3650", "Delete scans older than this"),
     "retention_max_scans_per_target": (100, "int:1:10000", "Cap on scans kept per target"),
     "schedule_enabled": (False, "bool", "Master switch for scheduled monitoring"),
     "schedule_interval_hours": (6, "int:1:720", "Default schedule interval"),
-    "schedule_profile": ("service", "choice:quick,service,deep", "Profile for scheduled scans"),
+    "schedule_profile": ("service", PROFILE_CHOICES, "Profile for scheduled scans"),
     "scan_timeout_seconds": (60, "int:5:3600", "Per-scan timeout"),
     "max_concurrent_scans": (2, "int:1:16", "Worker concurrency"),
     "export_max_scans": (20, "int:1:500", "Scans per /export"),
@@ -84,6 +115,48 @@ def _stringify(value: Any) -> str:
     return str(value)
 
 
+def _parse_choice(kind: str) -> list[tuple[str, str, str]]:
+    """Split a `choice:` kind into (value, label, description) triples.
+
+    Two forms are accepted:
+
+        choice:quick,service,deep
+            Bare names. The label falls back to the value, so the panel has
+            something to render without every setting having to spell it out.
+
+        choice:quick:Fast scan|top 100 ports|service:Top 100 with versions
+            An explicit label, and optionally a longer description after a
+            second pipe.
+
+    The value is whatever precedes the first colon, which is what
+    :func:`coerce` compares against the incoming text. Entries are split on
+    commas, so a label or description must not contain one -- which is why the
+    profile descriptions are truncated to their first sentence here rather than
+    trusted: an operator-facing string that can silently break a validator is
+    not worth the punctuation.
+
+    Splitting on the *first* colon is what keeps `default_profile`'s existing
+    behaviour intact: `choice:` itself contains a colon, and so does
+    `choice:allow,deny`, neither of which is part of an entry.
+    """
+    body = kind.split(":", 1)[1]
+    parsed: list[tuple[str, str, str]] = []
+    for entry in body.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split(":")
+        value = parts[0].strip()
+        label = parts[1].strip() if len(parts) > 1 and parts[1].strip() else value
+        description = ""
+        if "|" in label:
+            label, _, description = label.partition("|")
+            label = label.strip()
+            description = description.strip()
+        parsed.append((value, label, description))
+    return parsed
+
+
 def coerce(key: str, raw: Any) -> Any:
     """Validate and convert ``raw`` for ``key``.
 
@@ -122,7 +195,7 @@ def coerce(key: str, raw: Any) -> Any:
         return value
 
     if kind.startswith("choice:"):
-        allowed = kind.split(":", 1)[1].split(",")
+        allowed = [entry for entry, _, _ in _parse_choice(kind)]
         if text not in allowed:
             raise SettingError(
                 f"{key} must be one of {', '.join(allowed)}, got {text!r}"

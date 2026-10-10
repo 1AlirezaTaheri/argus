@@ -42,20 +42,53 @@ const SECTIONS: Section[] = [
 ]
 
 const CHOICES: Record<string, Array<{ value: string; label: string }>> = {
+  // Only the one setting whose labels cannot be generated. The language names
+  // are a display nicety in two scripts; there is nothing to derive them from.
   bot_language: [
     { value: 'fa', label: 'فارسی (Persian)' },
     { value: 'en', label: 'English' },
   ],
-  default_profile: [
-    { value: 'quick', label: 'quick — top 100 ports' },
-    { value: 'service', label: 'service — top 100 + versions' },
-    { value: 'deep', label: 'deep — top 1000 ports' },
-  ],
-  schedule_profile: [
-    { value: 'quick', label: 'quick' },
-    { value: 'service', label: 'service' },
-    { value: 'deep', label: 'deep' },
-  ],
+}
+
+/**
+ * Turn a `choice:` kind into selectable options.
+ *
+ * The server sends the vocabulary in `info.kind`, and it is the only place that
+ * knows it: `default_profile` was listed here by hand *and* in the settings
+ * store as `choice:quick,service,deep`, so adding a profile to
+ * `core/profiles.py` put it in neither -- the select offered three names and the
+ * validator rejected every other. Three copies of one list, and this was the
+ * third.
+ *
+ * The entry form is `value:label`, optionally `value:label|description`, and
+ * the value is whatever precedes the first colon. Commas separate entries, so a
+ * server-side label containing one is a server-side bug -- which is why the
+ * derivation drops them rather than trusting the source.
+ *
+ * An entry with no label falls back to its own value, matching the server's
+ * `_parse_choice`, so `choice:fa,en` renders as fa/en rather than as blanks.
+ */
+function parseChoiceKind(kind: string): Array<{ value: string; label: string }> {
+  if (!kind.startsWith('choice:')) return []
+  const body = kind.slice('choice:'.length)
+  const options: Array<{ value: string; label: string }> = []
+  for (const entry of body.split(',')) {
+    const trimmed = entry.trim()
+    if (!trimmed) continue
+    const colon = trimmed.indexOf(':')
+    if (colon === -1) {
+      options.push({ value: trimmed, label: trimmed })
+      continue
+    }
+    const value = trimmed.slice(0, colon).trim()
+    // Strip the optional description. Split rather than `indexOf('|')` so an
+    // entry with no pipe yields the whole remainder rather than an empty
+    // string.
+    const [rawLabel] = trimmed.slice(colon + 1).split('|')
+    const label = (rawLabel ?? '').trim()
+    if (value) options.push({ value, label: label || value })
+  }
+  return options
 }
 
 /** Preview of the greeting a bot user would see in the selected language. */
@@ -89,7 +122,7 @@ function SettingRow({
   onChange: (value: string) => void
   onReset: () => void
 }): JSX.Element {
-  const choices = CHOICES[name]
+  const choices = CHOICES[name] ?? parseChoiceKind(info.kind)
   const isBool = info.kind === 'bool'
   const isInt = typeof info.kind === 'string' && info.kind.startsWith('int:')
 

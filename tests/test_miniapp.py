@@ -487,8 +487,33 @@ class TestReads:
         assert resp.status_code == 404
 
     def test_profiles(self, client):
+        """Whatever the registry holds, and nothing else.
+
+        Written as a comparison against `profile_names()` rather than a literal
+        set: the literal was already the wrong shape, because it only ever
+        agreed with the registry until someone added a profile.
+        """
+        from core.profiles import profile_names
+
         body = client.get("/miniapp/profiles", headers={HEADER: blob()}).json()
-        assert set(body["profiles"]) == {"quick", "service", "deep"}
+        assert set(body["profiles"]) == set(profile_names())
+
+    def test_port_scoped_profiles_are_offered(self, client):
+        """A Telegram user must be able to reach a port-scoped profile.
+
+        Without one, a `deny_port` rule written in the panel is unreachable
+        from the bot: the profile that makes the rule applicable is not on the
+        list the Mini App offers. This is the same limitation the panel had,
+        and it is only half fixed by fixing the panel.
+        """
+        from core.profiles import port_scoped_profiles
+
+        body = client.get("/miniapp/profiles", headers={HEADER: blob()}).json()
+        offered = set(body["profiles"])
+        missing = set(port_scoped_profiles()) - offered
+        assert not missing, (
+            f"port-scoped profiles not offered by the Mini App: {sorted(missing)}"
+        )
 
 
 class TestRulesDryRun:
