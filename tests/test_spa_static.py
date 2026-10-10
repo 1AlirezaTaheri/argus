@@ -64,6 +64,17 @@ THEME_JS = (
     "}catch(e){}})()"
 )
 
+# The Mini App carries a different script -- Telegram's palette, not the
+# panel's. The fixture must be distinct, because the /app assertion looks for a
+# tg-bg marker to prove the right mount answered, and writing the panel's
+# fixture into the Mini App tree makes a correct serving look broken.
+MINI_THEME_JS = (
+    "(function(){try{var t=(window.Telegram&&window.Telegram.WebApp)"
+    "&&window.Telegram.WebApp.themeParams||{};"
+    "document.documentElement.style.setProperty('--tg-bg',t.bg_color||'#ffffff')"
+    "}catch(e){}})()"
+)
+
 # A file that exists on the host but must never be reachable through /admin.
 OUTSIDE_SECRET = "JWT_SECRET = 'do-not-serve-me'\n"
 
@@ -83,7 +94,7 @@ def spa(tmp_path, monkeypatch) -> pathlib.Path:
     mini = tmp_path / "miniapp"
     mini.mkdir()
     (mini / "index.html").write_text(INDEX_HTML, encoding="utf-8")
-    (mini / "theme.js").write_text(THEME_JS, encoding="utf-8")
+    (mini / "theme.js").write_text(MINI_THEME_JS, encoding="utf-8")
     (mini / "assets").mkdir()
     (mini / "assets" / "index.js").write_text("export default 1\n", encoding="utf-8")
 
@@ -149,6 +160,11 @@ class TestMiniAppIsServedTheSameWay:
         content_type = response.headers.get("content-type", "")
         assert "javascript" in content_type or "ecmascript" in content_type, (
             f"/app/theme.js was served as {content_type!r}"
+        )
+        # The marker that proves the right mount answered, rather than some
+        # other theme.js.
+        assert "tg-bg" in response.text, (
+            "/app/theme.js is not the Mini App's Telegram-palette script"
         )
         assert "tg-bg" in response.text
 
