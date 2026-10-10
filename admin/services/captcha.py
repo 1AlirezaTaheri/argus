@@ -125,16 +125,23 @@ class CaptchaStore:
         floods the endpoint therefore gets tokens that look fine but cannot
         verify, instead of accumulating server-side state without limit.
         """
+        # Prune expired challenges *before* the cap is consulted. This
+        # ordering is the whole fix: the cap used to be checked first and
+        # returned early, which made `_prune` unreachable for exactly the
+        # clients that had hit the cap -- and pruning is the only thing that
+        # releases a client once its challenges age out. Five outstanding
+        # challenges therefore became permanent until the process restarted.
+        self._prune(now)
+
         count = self._per_client.get(client_ip, 0)
         if count >= _MAX_PENDING_PER_CLIENT:
             log.warning(
-                "captcha challenge refused: client already holds %d unsolved",
+                "captcha challenge refused: client still holds %d unsolved",
                 count,
             )
             return False
         self._pending[nonce] = (digest, client_ip, now)
         self._per_client[client_ip] = count + 1
-        self._prune(now)
         return True
 
     def check_and_spend(self, nonce: str, supplied_digest: str,

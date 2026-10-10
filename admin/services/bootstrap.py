@@ -373,11 +373,26 @@ def _mount_mini_app(app: FastAPI) -> None:
     @mini_router.get("/app", include_in_schema=False)
     @mini_router.get("/app/{path:path}", include_in_schema=False)
     async def _miniapp_spa(path: str = ""):
-        """index.html for every Mini App route.
+        """A real file from the Mini App build, or the shell for a client route.
 
         Telegram opens the app inside a WebView at whatever path the user
         navigated to, so client-side routes must resolve to the shell.
+
+        That fallback is not unconditional, for the same reason the panel's is
+        not: Vite copies public/ to the *root* of dist, so /app/theme.js sits
+        outside the /app/assets mount. Answering it with index.html gave the
+        browser text/html for a script, which it refuses outright -- and the
+        pre-paint palette that file carries is what stops a dark-theme Telegram
+        user seeing a white flash.
+
+        normpath collapses ".." and the prefix check rejects anything resolving
+        outside the build, so a request for a source file falls through to the
+        shell rather than being served.
         """
+        root = os.path.dirname(os.path.abspath(MINIAPP_INDEX))
+        candidate = os.path.normpath(os.path.join(root, path))
+        if candidate.startswith(root + os.sep) and os.path.isfile(candidate):
+            return FileResponse(candidate)
         return FileResponse(
             MINIAPP_INDEX, headers={"Cache-Control": "no-store"}
         )

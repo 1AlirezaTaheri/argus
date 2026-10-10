@@ -70,7 +70,7 @@ OUTSIDE_SECRET = "JWT_SECRET = 'do-not-serve-me'\n"
 
 @pytest.fixture
 def spa(tmp_path, monkeypatch) -> pathlib.Path:
-    """Build a dist fixture and point the app's SPA constants at it."""
+    """Build dist fixtures for the panel and the Mini App, and point the app at them."""
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "index.html").write_text(INDEX_HTML, encoding="utf-8")
@@ -80,8 +80,17 @@ def spa(tmp_path, monkeypatch) -> pathlib.Path:
     (dist / "assets").mkdir()
     (dist / "assets" / "index.js").write_text("export default 1\n", encoding="utf-8")
 
+    mini = tmp_path / "miniapp"
+    mini.mkdir()
+    (mini / "index.html").write_text(INDEX_HTML, encoding="utf-8")
+    (mini / "theme.js").write_text(THEME_JS, encoding="utf-8")
+    (mini / "assets").mkdir()
+    (mini / "assets" / "index.js").write_text("export default 1\n", encoding="utf-8")
+
     monkeypatch.setattr(bootstrap, "FRONTEND_DIST", str(dist), raising=False)
     monkeypatch.setattr(bootstrap, "SPA_INDEX", str(dist / "index.html"))
+    monkeypatch.setattr(bootstrap, "MINIAPP_DIST", str(mini), raising=False)
+    monkeypatch.setattr(bootstrap, "MINIAPP_INDEX", str(mini / "index.html"))
     return dist
 
 
@@ -117,6 +126,46 @@ class TestThemeScriptIsServed:
         response = client.get("/admin/assets/index.js")
         assert response.status_code == 200
         assert "javascript" in response.headers.get("content-type", "")
+
+
+class TestMiniAppIsServedTheSameWay:
+    """The Mini App's own /app mount had the identical defect.
+
+    Its index.html carried an inline script applying Telegram's palette before
+    React mounted, and the CSP refused it on every load. The Mini App's CSS
+    hardcodes a *light* `:root` palette, so blocked meant every dark-theme
+    Telegram user got a white flash. Moving the script to a file put it at
+    /app/theme.js -- outside the /app/assets mount -- so the catch-all had to
+    learn to serve real files too, or the browser refuses the script for being
+    text/html.
+    """
+
+    def test_theme_script_is_javascript(self, client) -> None:
+        response = client.get("/app/theme.js")
+        assert response.status_code == 200, (
+            f"/app/theme.js returned {response.status_code}; the Mini App "
+            "catch-all is answering for it with the shell"
+        )
+        content_type = response.headers.get("content-type", "")
+        assert "javascript" in content_type or "ecmascript" in content_type, (
+            f"/app/theme.js was served as {content_type!r}"
+        )
+        assert "tg-bg" in response.text
+
+    def test_miniapp_routes_get_the_shell(self, client) -> None:
+        for route in ("/app", "/app/scans", "/app/targets/3", "/app/nope"):
+            response = client.get(route)
+            assert response.status_code == 200, f"{route} -> {response.status_code}"
+            assert '<div id="root">' in response.text, (
+                f"{route} did not return the Mini App shell, so a Telegram "
+                "WebView cannot resolve the client-side route"
+            )
+
+    def test_miniapp_traversal_is_refused(self, client) -> None:
+        for attempt in ("/app/../admin/config.py", "/app/%2e%2e/etc/passwd"):
+            response = client.get(attempt)
+            assert "JWT_SECRET" not in response.text
+            assert "root:x:" not in response.text
 
 
 class TestClientRoutesStillGetTheShell:

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 
+import httpx
+import telegram.error
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 from admin.services import audit as audit_service
@@ -36,6 +38,15 @@ from security.authorization import Authorizer
 from workers.scan_worker import ScanJob, ScanWorker
 
 log = logging.getLogger(__name__)
+
+# Connection attempts before httpx gives up on a request.
+#
+# The bot's link is not reliable: api.telegram.org resolves to an AAAA record and
+# the container has no IPv6 route, so bursts of ConnectError are routine here and
+# each one used to cost a whole update. Connection failures only -- a retry that
+# also re-sent a request which may already have been processed could duplicate a
+# Telegram action, and that risk is not worth taking to paper over a flaky link.
+_HTTP_CONNECT_RETRIES = 3
 
 
 async def _deliver(app, chat_id: int, text: str) -> None:
@@ -199,7 +210,21 @@ async def on_unhandled_error(update: object, context: ContextTypes.DEFAULT_TYPE)
     unresponsive bot.
     """
     error = context.error
-    log.exception("Unhandled exception while processing update", exc_info=error)
+
+    # A dropped connection is not a defect in a handler.
+    #
+    # This was logged as "Unhandled exception while processing update" with a
+    # full traceback, which is wrong -- the cause was the link, not the code --
+    # and actively misleading, because it points the reader at the handlers.
+    if isinstance(error, (telegram.error.NetworkError, telegram.error.TimedOut)):
+        log.warning(
+            "Transient Telegram network failure while processing an update: "
+            "%s: %s",
+            type(error).__name__,
+            error,
+        )
+    else:
+        log.exception("Unhandled exception while processing update", exc_info=error)
 
     message = getattr(update, "effective_message", None)
     if message is None:
@@ -268,9 +293,23 @@ def build_application(settings: Settings):
         retention_max_per_target=settings.retention_max_scans_per_target,
     )
 
+    # A transport-level retry for connection failures, applied to both the
+    # request client and the long-polling client, since either can be the one
+    # holding a dropped connection.
+    api_client = httpx.AsyncClient(
+        transport=httpx.HTTPTransport(retries=_HTTP_CONNECT_RETRIES),
+        timeout=httpx.Timeout(20.0, connect=20.0),
+    )
+    updates_client = httpx.AsyncClient(
+        transport=httpx.HTTPTransport(retries=_HTTP_CONNECT_RETRIES),
+        timeout=httpx.Timeout(20.0, connect=20.0),
+    )
+
     app = (
         ApplicationBuilder()
         .token(settings.telegram_bot_token)
+        .request(api_client)
+        .get_updates_request(updates_client)
         .post_init(_post_init)
         .post_shutdown(_post_shutdown)
         .build()
