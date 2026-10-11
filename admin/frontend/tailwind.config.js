@@ -105,6 +105,17 @@ export default {
         // For focus rings and the active nav item. Tinted with the theme's
         // own accent rather than pure black, so it reads as glow.
         glow: 'var(--shadow-glow)',
+        // The elevation scale. Separate from sm/md/lg because each level pairs
+        // a drop shadow with an inset top highlight, and that bevel is what
+        // makes elevation legible on a near-black surface -- a plain shadow is
+        // invisible there. The two scales are not interchangeable: these are
+        // surface levels, those are generic shadows.
+        'elevate-1': 'var(--elevate-1)',
+        elevate: 'var(--elevate-2)',
+        'elevate-3': 'var(--elevate-3)',
+        // Pressed into its parent. For inputs and read-only panels that sit
+        // inside a card rather than on it.
+        well: 'var(--inset-well)',
       },
       // Only durations the app actually uses are declared: Tailwind emits a
       // utility only if the scanned source references it, so an unreferenced

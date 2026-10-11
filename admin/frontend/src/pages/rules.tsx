@@ -56,9 +56,6 @@ import {
   SelectValue,
   Switch,
   Textarea,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@/components/ui'
 import { EmptyState, ErrorState, Skeleton } from '@/components/feedback'
 import { RulesTester } from '@/components/rules-tester'
@@ -519,33 +516,33 @@ function RuleRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="flex">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={first || busy}
-                onClick={() => onMove(-1)}
-                aria-label={`Move ${rule.name} earlier`}
-              >
-                <ArrowUp className="h-4 w-4" aria-hidden />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={last || busy}
-                onClick={() => onMove(1)}
-                aria-label={`Move ${rule.name} later`}
-              >
-                <ArrowDown className="h-4 w-4" aria-hidden />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>Lower priority number runs first</TooltipContent>
-        </Tooltip>
+        {/* No tooltip wrapper. Two buttons inside one `TooltipTrigger asChild`
+            share a single trigger, so the tooltip described whichever of the
+            two the pointer happened to be over -- and the wrapper span existed
+            only to satisfy `asChild`. The aria-labels already say what each
+            button does, and they are what a screen reader reads. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          disabled={first || busy}
+          onClick={() => onMove(-1)}
+          aria-label={`Move ${rule.name} earlier (runs sooner)`}
+          title="Run sooner — a lower priority number is evaluated first"
+        >
+          <ArrowUp className="h-4 w-4" aria-hidden />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          disabled={last || busy}
+          onClick={() => onMove(1)}
+          aria-label={`Move ${rule.name} later (runs after)`}
+          title="Run later — a higher priority number is evaluated after this"
+        >
+          <ArrowDown className="h-4 w-4" aria-hidden />
+        </Button>
 
         <Switch
           checked={rule.enabled}

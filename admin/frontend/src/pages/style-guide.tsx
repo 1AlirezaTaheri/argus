@@ -178,6 +178,83 @@ export function StyleGuidePage(): JSX.Element {
         </div>
       </Section>
 
+      <Section
+        title="Depth"
+        description="Three elevations, one floating surface, one well"
+      >
+        <p className="mb-3 max-w-3xl text-sm text-muted">
+          A drop shadow alone does not read as elevation on a near-black page:
+          there is no light left to darken. Each level therefore pairs the
+          shadow with an inset highlight along the top edge, which is the
+          surface turning away from a light above it. The highlight is
+          deliberately only on the top -- the same line along the bottom reads
+          as a glow rather than as height.
+        </p>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* The three levels, overlapping.
+
+              Side by side they are indistinguishable, which is the honest
+              result -- the difference between them is mostly a soft halo that
+              has nothing to fall on when each card is alone on the page. This
+              is the arrangement that actually shows elevation: each panel's
+              shadow lands on the panel behind it, and the lit top edge reads
+              against the darker surface beneath. A grid of three equal tiles
+              demonstrates nothing.
+          */}
+          <div className="relative flex min-h-[15rem] flex-col justify-end gap-3 rounded-lg border border-border bg-bg p-6">
+            <div className="absolute right-3 top-3 text-[11px] text-faint">
+              overlapping, so each shadow lands on the one behind
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-4 shadow-elevate-3">
+              <p className="text-xs text-muted">elevate-3</p>
+              <p className="mt-1 text-sm">Login panel, dialogs</p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-4 shadow-elevate">
+              <p className="text-xs text-muted">elevate-2</p>
+              <p className="mt-1 text-sm">Hover on an interactive card</p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-4 shadow-elevate-1">
+              <p className="text-xs text-muted">elevate-1</p>
+              <p className="mt-1 text-sm">Cards, table panels</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div className="surface-raised p-4">
+              <p className="text-xs text-muted">surface-raised</p>
+              <p className="mt-1 text-sm">
+                A panel floating free of the page. The sheen is the second cue
+                and the one that still works where a shadow has no contrast to
+                work with.
+              </p>
+            </div>
+            <div className="inset-well rounded-lg border border-input bg-bg p-4">
+              <p className="text-xs text-muted">inset-well</p>
+              <p className="mt-1 text-sm">
+                Pressed in, not resting on. Inputs and read-only panels. An
+                input that casts a shadow outward reads as a card with text on
+                it, which is the wrong affordance.
+              </p>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-4 shadow-elevate-1">
+              <p className="text-xs text-muted">and in the light theme</p>
+              <p className="mt-1 text-sm text-muted">
+                Flip the theme and compare: the bevel inverts to a faint dark
+                wash, because white on white is invisible and the shadow has to
+                do the work instead.
+              </p>
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 max-w-3xl text-xs text-faint">
+          Every transform these imply — the hover lift, the button press, the
+          rejected-login shake — is removed under{' '}
+          <code className="font-mono">prefers-reduced-motion</code>, not merely
+          shortened. The elevation change survives, so the affordance is not
+          lost with the movement.
+        </p>
+      </Section>
+
       <Section title="Card variants" description="default, bordered, elevated, interactive">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Card variant="default" className="p-4">

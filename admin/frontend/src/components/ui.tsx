@@ -222,7 +222,7 @@ const cardVariants = cva('rounded-lg', {
       bordered: 'border border-border bg-surface',
       // Lifted: a shadow instead of relying on the border. Used for panels
       // that sit above the page (dropdowns, floating cards).
-      elevated: 'border border-border bg-elevated shadow-lg',
+      elevated: 'border border-border bg-elevated shadow-elevate',
       // Clickable surface. Adds the hover/focus affordances a button would,
       // and only when the caller passes an onClick -- otherwise a card that
       // looks clickable but is not is a dark pattern.
