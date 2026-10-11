@@ -28,7 +28,7 @@ echo "### detail-page strings"
 for probe in \
     'All targets' \
     'Full detail' \
-    'Activity â€” last' \
+    'Activity — last' \
     'Activity' \
     'Port distribution' \
     'Hosts and services' \

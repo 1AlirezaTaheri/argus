@@ -145,6 +145,21 @@ def decode_token(token: str) -> Principal:
     return Principal(id=principal_id, username=username, role=role)
 
 
+#: How many CAPTCHA challenges one address may pull per window.
+#:
+#: Deliberately much higher than the login budget. The two endpoints face
+#: different threats: this one guards against a script harvesting challenges in
+#: bulk, which needs volume, while the login limiter guards against someone
+#: guessing a password, which does not. Sharing one budget meant that *loading
+#: the login form* spent the budget that protects the password -- five reloads
+#: and an operator is locked out having never entered a wrong password.
+#:
+#: 30/minute still refuses a bulk pull after about two seconds of hammering,
+#: and leaves a person who reloaded five times, mistyped twice and retried
+#: nine with room to spare.
+CAPTCHA_REQUESTS_PER_WINDOW = 30
+
+
 class LoginRateLimiter:
     """Per-IP login throttling: 5 attempts per 60 seconds.
 

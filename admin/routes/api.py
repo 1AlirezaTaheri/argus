@@ -111,8 +111,11 @@ async def get_captcha(request: Request):
     """Issue a login challenge.
 
     Unauthenticated by necessity -- it is the login page that needs it --
-    so it shares the login rate limiter. Otherwise this endpoint would be
-    a free, unthrottled way for a script to pull challenges in bulk.
+    so it is rate limited, but on its own budget rather than the login one.
+    Sharing them meant loading this form spent the allowance that exists to
+    stop a password being guessed: five reloads locked an operator out with no
+    wrong password anywhere in the story. The limit here is much higher
+    because the threat is bulk collection, not guessing.
 
     It answers whether or not CAPTCHA_ENABLED is set. A client may have a
     cached page; one extra cheap request beats a skew between what the
@@ -122,11 +125,17 @@ async def get_captcha(request: Request):
     context = ctx(request)
     ip = client_ip(request)
 
-    allowed, _remaining = context.login_limiter.check(ip)
+    # Its own limiter, not the login one. Charging a page render against the
+    # budget that protects a password meant five reloads locked an operator out
+    # of the panel without a single wrong password.
+    allowed, _remaining = context.captcha_limiter.check(ip)
     if not allowed:
         raise HTTPException(
             status_code=429,
-            detail="Too many login attempts. Try again shortly.",
+            detail=(
+                "Too many security-question requests. "
+                "Try again shortly."
+            ),
         )
 
     challenge = captcha_service.issue_challenge(ip, context.captcha_store)

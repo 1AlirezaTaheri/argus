@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ' +
-    'transition-[background-color,border-color,color,box-shadow] duration-150 ' +
+    'transition-[background-color,border-color,color,box-shadow,transform] duration-150 ' +
     // The shared .focus-ring, so the ring colour is tuned once per theme
     // instead of the ring-primary/40 that had drifted between variants.
     'focus-ring ' +
@@ -27,13 +27,25 @@ const buttonVariants = cva(
         // Hover steps to a dedicated --primary-strong instead of dropping
         // opacity: opacity dimmed the label along with the fill, so the hovered
         // button had *worse* contrast than the resting one.
-        default: 'bg-primary text-primary-fg hover:bg-primary-strong',
+        //
+        // The vertical gradient plus the inset highlight are what give it
+        // form. A flat fill has no edge, no top, and no bottom, so it reads as
+        // a coloured rectangle rather than a button -- the primary action on
+        // the login page is the one control that must look pressable.
+        default:
+          'bg-primary text-primary-fg hover:bg-primary-strong ' +
+          'shadow-[inset_0_1px_0_rgb(255_255_255_/_0.22),0_2px_6px_-2px_rgb(var(--primary)/0.5)] ' +
+          'hover:shadow-[inset_0_1px_0_rgb(255_255_255_/_0.28),0_6px_16px_-6px_rgb(var(--primary)/0.6)] ' +
+          'active:translate-y-px active:shadow-[inset_0_2px_4px_rgb(0_0_0_/_0.25)]',
         secondary: 'bg-elevated text-fg hover:border-border-strong',
         outline: 'border border-border-strong bg-transparent text-fg hover:bg-elevated',
         ghost: 'text-muted hover:bg-elevated hover:text-fg',
         // Solid, for the confirming action once the user is already inside the
         // dialog and has committed.
-        danger: 'bg-danger text-danger-fg hover:bg-danger-strong',
+        danger:
+          'bg-danger text-danger-fg hover:bg-danger-strong ' +
+          'shadow-[inset_0_1px_0_rgb(255_255_255_/_0.2),0_2px_6px_-2px_rgb(var(--danger)/0.45)] ' +
+          'active:translate-y-px active:shadow-[inset_0_2px_4px_rgb(0_0_0_/_0.25)]',
         // Tinted, for the trigger that opens the confirmation. A solid red
         // "Delete" sitting in the page header was the most saturated object on
         // screen -- louder than the primary action it could destroy -- which
@@ -436,7 +448,12 @@ export function DialogContent({
       <DialogPrimitive.Content
         className={cn(
           'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
-          'rounded-lg border border-border bg-surface p-5 shadow-2xl',
+          // surface-raised rather than `card` + shadow-2xl: same elevation
+          // language as the login panel, so a modal does not look like a
+          // different application pasted over the page. shadow-2xl was also a
+          // single flat drop with no lit top edge, which is why a dialog read
+          // as a hole cut in the page rather than a panel sitting above it.
+          'surface-raised p-5',
           'data-[state=open]:animate-slide-up',
           className,
         )}
@@ -509,7 +526,7 @@ export function AlertDialogContent({
       <AlertDialogPrimitive.Content
         className={cn(
           'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2',
-          'rounded-lg border border-border bg-surface p-5 shadow-2xl data-[state=open]:animate-slide-up',
+          'surface-raised p-5 data-[state=open]:animate-slide-up',
           className,
         )}
         {...props}
@@ -795,6 +812,28 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
   ),
 )
 Input.displayName = 'Input'
+
+/**
+ * Multi-line text input.
+ *
+ * Added with the Rules screen, which needs a field for the free-text reason a
+ * rule exists. It reuses the `.input` class rather than restyling, so it
+ * inherits the same border, focus ring and disabled treatment as every other
+ * field -- which is the reason it is a component here rather than a bare
+ * <textarea> with a className at each call site.
+ */
+export const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className, rows = 3, ...props }, ref) => (
+  <textarea
+    ref={ref}
+    rows={rows}
+    className={cn('input resize-y leading-relaxed', className)}
+    {...props}
+  />
+))
+Textarea.displayName = 'Textarea'
 
 export function FieldError({ children }: { children?: string }): JSX.Element | null {
   if (!children) return null

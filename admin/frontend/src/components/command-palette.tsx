@@ -11,6 +11,7 @@ import {
   ScrollText,
   Search,
   Settings as SettingsIcon,
+  Shield as ShieldIcon,
   Users as UsersIcon,
 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -35,6 +36,7 @@ const PAGES: ReadonlyArray<{
   { label: 'Telegram Users', to: '/telegram-users', icon: UsersIcon },
   { label: 'Targets', to: '/targets', icon: Network },
   { label: 'Audit Log', to: '/audit', icon: ScrollText },
+  { label: 'Rules', to: '/rules', icon: ShieldIcon },
   { label: 'Settings', to: '/settings', icon: SettingsIcon },
   { label: 'Style Guide', to: '/style-guide', icon: Paintbrush },
 ]

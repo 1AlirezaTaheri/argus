@@ -207,10 +207,29 @@ class TestCaptchaEndpoint:
                 body["token"], answer, peer_ip(client), ctx.captcha_store)
             assert ok, f"freshly issued challenge did not verify: {reason}"
 
-    def test_rate_limited_like_login(self, client):
-        """Otherwise it is a free way to pull challenges in bulk."""
-        codes = [client.get("/api/captcha").status_code for _ in range(7)]
-        assert 429 in codes, codes
+    def test_rate_limited(self, client):
+        """Otherwise it is a free way to pull challenges in bulk.
+
+        Checked against the captcha endpoint's own budget rather than the login
+        budget's five. It used to draw from the login limiter, and requiring a
+        429 inside seven requests is what encoded that coupling -- so the
+        separation and the test failed together.
+
+        The refusal must also land *after* the budget is spent. Asking only
+        "is there a 429 in this batch" is satisfied just as well by an endpoint
+        that refuses everything, which is the opposite of what is wanted.
+        """
+        budget = auth_service.CAPTCHA_REQUESTS_PER_WINDOW
+        codes = [client.get("/api/captcha").status_code for _ in range(budget + 2)]
+        assert 429 in codes, (
+            f"no refusal in {budget + 2} requests; the endpoint is an "
+            "unlimited source of challenges"
+        )
+        first = codes.index(429)
+        assert first >= budget, (
+            f"refused after {first} requests, before the budget of {budget} "
+            "was spent -- it is refusing traffic it should be serving"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -166,6 +166,80 @@
     0 0 14px -4px rgb(var(--primary) / 0.35);
 }
 
+/* ---------------------------------------------------------------------------
+   Depth.
+
+   A shadow alone does not read as elevation on a near-black page: `0 1px 2px
+   rgb(0 0 0 / 0.45)` on `#0a0e17` is invisible, because there is no light to
+   darken. What the eye actually uses is the *edge* -- a lit top border where
+   the surface turns away from a light source above it.
+
+   So each level pairs a drop shadow with an inset top highlight. The bevel is
+   what makes a card look like an object rather than a rectangle of slightly
+   different black, and it is why these tokens exist rather than the three
+   shadows alone.
+
+   The bevel is deliberately asymmetric: 1px of light at the top, nothing at
+   the bottom. Light comes from above; a highlight along the bottom edge reads
+   as a glow, not as height.
+
+   Light theme keeps a much weaker bevel. On a white surface the shadow already
+   does the work and a stronger highlight would just look like a border.
+   --------------------------------------------------------------------------- */
+
+:root,
+[data-theme='dark'] {
+  /* Lit top edge. ~5% white is the most that reads as a bevel rather than as a
+     mis-drawn border. */
+  --bevel: inset 0 1px 0 rgb(255 255 255 / 0.055);
+  --bevel-strong: inset 0 1px 0 rgb(255 255 255 / 0.08);
+
+  /* The three levels the app actually uses. */
+  --elevate-1: var(--bevel), 0 1px 2px rgb(0 0 0 / 0.4);
+  --elevate-2: var(--bevel-strong), 0 8px 20px -6px rgb(0 0 0 / 0.6),
+    0 2px 6px -2px rgb(0 0 0 / 0.45);
+  --elevate-3: var(--bevel-strong), 0 28px 56px -16px rgb(0 0 0 / 0.75),
+    0 10px 20px -10px rgb(0 0 0 / 0.55);
+
+  /* Lit from above, for a surface floating free of the page. */
+  --sheen: linear-gradient(
+    180deg,
+    rgb(255 255 255 / 0.05) 0%,
+    rgb(255 255 255 / 0.014) 28%,
+    transparent 62%
+  );
+
+  /* A surface pressed *into* its parent rather than resting on it. Inputs and
+     the CAPTCHA readout: they are wells, and treating them as raised panels is
+     what made the CAPTCHA box look lighter than the card holding it. */
+  --inset-well: inset 0 1px 2px rgb(0 0 0 / 0.35), inset 0 -1px 0 rgb(255 255 255 / 0.03);
+}
+
+[data-theme='light'] {
+  --bevel: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --bevel-strong: inset 0 1px 0 rgb(255 255 255 / 1);
+
+  --elevate-1: var(--bevel), 0 1px 2px rgb(15 23 42 / 0.06),
+    0 0 0 1px rgb(15 23 42 / 0.03);
+  --elevate-2: var(--bevel-strong), 0 8px 20px -6px rgb(15 23 42 / 0.12),
+    0 2px 6px -2px rgb(15 23 42 / 0.07);
+  --elevate-3: var(--bevel-strong), 0 28px 56px -16px rgb(15 23 42 / 0.18),
+    0 10px 20px -10px rgb(15 23 42 / 0.1);
+
+  /* White on white is invisible, so the light theme is lit from *below*: a
+     faint cool wash at the top instead of a highlight. Same intent -- "lit" --
+     and it is the direction that actually shows on a light surface. */
+  --sheen: linear-gradient(
+    180deg,
+    rgb(15 23 42 / 0.035) 0%,
+    rgb(15 23 42 / 0.012) 26%,
+    transparent 60%
+  );
+
+  --inset-well: inset 0 1px 3px rgb(15 23 42 / 0.07),
+    inset 0 -1px 0 rgb(255 255 255 / 0.8);
+}
+
 * {
   border-color: rgb(var(--border));
 }
@@ -189,6 +263,26 @@ html.theme-transition *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* The rule above only kills the *animation*. A transform is not an animation,
+     so the hover lift and the button's press would still move -- which is the
+     part a motion-sensitive user actually asked to be spared. Removed rather
+     than shortened, because the elevation change survives: the shadow still
+     deepens on hover, so the affordance is not lost with the movement. */
+  .card-interactive:hover,
+  .card-interactive:active {
+    transform: none !important;
+  }
+
+  .btn-solid:active,
+  button:active {
+    transform: none !important;
+  }
+
+  /* And the shake, which is a rejection the user did not ask to receive. */
+  .animate-shake {
+    animation: none !important;
   }
 }
 
@@ -219,23 +313,47 @@ body {
 }
 
 @layer components {
-  /* Panels. The shadow is what separates a card from the page now that the
-     surface colours are close together; without it the layout reads as flat
-     blocks of colour. */
+  /* Panels. The bevel-plus-shadow pair is what separates a card from the page
+     once the surface colours are close together; a shadow alone is invisible on
+     the dark theme, where there is no light left to darken. */
   .card {
-    @apply rounded-lg border border-border bg-surface shadow-sm;
+    @apply rounded-lg border border-border bg-surface;
+    box-shadow: var(--elevate-1);
   }
 
   /* A card that navigates or acts. Lift on hover so the hit area is obvious,
      and keep the transition short enough to feel like a response rather than
-     an animation. */
+     an animation. Two pixels rather than one: a one-pixel lift against a
+     one-pixel border is easy to mistake for the border changing colour. */
   .card-interactive {
-    @apply transition-[box-shadow,border-color,transform] duration-150
-      hover:-translate-y-px hover:border-border-strong hover:shadow-md;
+    @apply transition-[box-shadow,border-color,transform] duration-150;
+    box-shadow: var(--elevate-1);
+  }
+
+  .card-interactive:hover {
+    @apply -translate-y-0.5 border-border-strong;
+    box-shadow: var(--elevate-2);
   }
 
   .card-interactive:active {
     transform: translateY(0);
+  }
+
+  /* A surface floating free of the page: the login card, and the modals.
+
+     The gradient is the second depth cue and works on a surface too dark for a
+     shadow to register. It runs from a touch lighter at the top-left to fully
+     transparent by the bottom, so the panel appears lit from above rather than
+     merely outlined. */
+  .surface-raised {
+    @apply rounded-xl border border-border bg-surface;
+    box-shadow: var(--elevate-3);
+    background-image: var(--sheen);
+  }
+
+  /* A surface pressed into its parent. Inputs, and the CAPTCHA readout. */
+  .inset-well {
+    box-shadow: var(--inset-well);
   }
 
   /* One focus treatment for the whole app. Every interactive element uses this
@@ -253,6 +371,16 @@ body {
       placeholder:text-faint
       focus:border-border-strong focus:ring-2 focus:ring-primary/25
       disabled:cursor-not-allowed disabled:opacity-50;
+    /* A well, not a panel. An input that casts a shadow outward reads as a
+       raised card with text on it, which is the wrong affordance. */
+    box-shadow: var(--inset-well);
+  }
+
+  /* Focus removes the well and adds elevation instead: the field being lit is
+     the feedback, and keeping the inset while adding a ring would leave it
+     looking pressed in at the exact moment the user needs it to look active. */
+  .input:focus {
+    box-shadow: var(--elevate-1), 0 0 0 3px rgb(var(--primary) / 0.18);
   }
 
   .label {

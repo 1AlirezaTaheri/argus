@@ -403,6 +403,89 @@ export interface SettingInfo {
 export type SettingsResponse = Record<string, SettingInfo>
 
 // ---------------------------------------------------------------------------
+// Rules
+//
+// Mirrors the schemas in admin/routes/rules.py. The backend is already
+// complete -- list, create, patch, delete, toggle, reorder, test, import, export,
+// and per-rule hits -- so these types are the only thing that was missing for
+// the screen to exist.
+// ---------------------------------------------------------------------------
+
+/** The rule types the engine knows. Mirrors core.rule_values.KNOWN_TYPES. */
+export const RULE_TYPES = [
+  'allow_cidr',
+  'deny_cidr',
+  'allow_domain',
+  'deny_domain',
+  'allow_port',
+  'deny_port',
+  'max_scan_time',
+  'rate_limit',
+] as const
+
+export type RuleType = (typeof RULE_TYPES)[number]
+
+/** Who a rule applies to. `scope_id` is a Telegram id or a target name. */
+export type RuleScope = 'global' | 'user' | 'target'
+
+export interface Rule {
+  id: number
+  name: string
+  rule_type: RuleType
+  value: string
+  priority: number
+  enabled: boolean
+  scope: RuleScope
+  scope_id: string | null
+  description: string | null
+  /** How many times this rule has blocked or shaped a decision. */
+  hit_count?: number
+  created_by?: string | null
+  created_at?: string | null
+}
+
+export interface RuleList {
+  rules: Rule[]
+  total: number
+}
+
+export interface RuleHit {
+  id: number
+  rule_id: number
+  created_at: string
+  target: string | null
+  allowed: boolean
+  reason: string
+}
+
+export interface RuleHitPage {
+  hits: RuleHit[]
+  total: number
+  page: number
+  page_size: number
+}
+
+/**
+ * The engine's answer for a hypothetical request.
+ *
+ * `warnings` is not decoration: it reports conditions that made a rule inert,
+ * which is the only way to discover that, say, port rules were skipped because
+ * the profile declares no port list.
+ */
+export interface RuleTestResult {
+  allowed: boolean
+  reason: string
+  rule_id: number | null
+  rule_name: string | null
+  effective_rate_limit_seconds: number | null
+  effective_scan_timeout: number | null
+  warnings: string[]
+  rules_considered: number
+  rules_enabled: number
+  side_effects: string
+}
+
+// ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
 
@@ -470,6 +553,118 @@ export const api = {
     }),
 
   logout: () => request<{ ok: boolean }>('/logout', { method: 'POST' }),
+
+  // --- rules ---------------------------------------------------------------
+
+  /**
+   * List rules, highest priority first.
+   *
+   * The server decides the order -- priority ascending, then id -- and the table
+   * renders it as given. Re-sorting client-side would show a different order
+   * from the one the engine evaluates in, which is worse than no control.
+   */
+  listRules: (signal?: AbortSignal) =>
+    request<RuleList>('/rules', signal ? { signal } : {}),
+
+  createRule: (body: {
+    name: string
+    rule_type: RuleType
+    value: string
+    priority?: number
+    enabled?: boolean
+    scope?: RuleScope
+    scope_id?: string | null
+    description?: string | null
+  }) => request<Rule>('/rules', { method: 'POST', body }),
+
+  /**
+   * Partial update.
+   *
+   * `name` is absent from the server's RulePatch, so it is intentionally not
+   * here: sending it would be silently dropped and the form would appear to
+   * save a rename that never happened.
+   */
+  updateRule: (
+    id: number,
+    body: {
+      rule_type?: RuleType
+      value?: string
+      priority?: number
+      enabled?: boolean
+      scope?: RuleScope
+      scope_id?: string | null
+      description?: string | null
+    },
+  ) => request<Rule>(`/rules/${id}`, { method: 'PATCH', body }),
+
+  /**
+   * Delete a rule.
+   *
+   * `confirm` is required by the server: a delete with recorded history is not
+   * something a single click should do, and the server refuses without it
+   * rather than trusting the client to have asked.
+   */
+  deleteRule: (id: number) =>
+    request<{ deleted: string; hits_kept: number }>(
+      `/rules/${id}?confirm=true`,
+      { method: 'DELETE' },
+    ),
+
+  /** Flip enabled, and take the new state from the response rather than guessing. */
+  toggleRule: (id: number) =>
+    request<{ id: number; enabled: boolean }>(`/rules/${id}/toggle`, { method: 'POST' }),
+
+  /** Apply an explicit evaluation order, top to bottom. */
+  reorderRules: (ids: number[]) =>
+    request<{ total: number }>('/rules/reorder', { method: 'POST', body: { ids } }),
+
+  /**
+   * Ask the engine what it would decide, without side effects.
+   *
+   * Passing `ports` is what makes port rules evaluable: with no port list the
+   * engine reports them as skipped rather than pretending they passed.
+   */
+  testRules: (body: {
+    target: string
+    ports?: number[]
+    actor_id?: number
+    now?: string
+  }) => request<RuleTestResult>('/rules/test', { method: 'POST', body }),
+
+  listRuleHits: (params?: { rule_id?: number; page?: number; page_size?: number },
+                 signal?: AbortSignal) =>
+    request<RuleHitPage>(`/rule-hits${toQuery(params ?? {})}`, signal ? { signal } : {}),
+
+  /** A portable snapshot of every rule, for backup or a migration. */
+  exportRules: (signal?: AbortSignal) =>
+    request<{ version: number; exported_at: string; rules: Rule[] }>(
+      '/rules/export',
+      signal ? { signal } : {},
+    ),
+
+  /**
+   * Load rules from a snapshot.
+   *
+   * `replace` clears what is there first, so the form makes that explicit
+   * rather than letting a merge quietly leave stale rules behind.
+   */
+  importRules: (
+    rules: Array<{
+      name: string
+      rule_type: RuleType
+      value: string
+      priority?: number
+      enabled?: boolean
+      scope?: RuleScope
+      scope_id?: string | null
+      description?: string | null
+    }>,
+    replace = false,
+  ) =>
+    request<{ imported: number; replaced: boolean }>('/rules/import', {
+      method: 'POST',
+      body: { rules, replace },
+    }),
 
   /**
    * The session probe.

@@ -13,6 +13,7 @@ import { TelegramUsersPage } from '@/pages/telegram-users'
 import { TargetsPage } from '@/pages/targets'
 import { TargetDetailPage } from '@/pages/target-detail'
 import { AuditPage } from '@/pages/audit'
+import { RulesPage } from '@/pages/rules'
 import { SettingsPage } from '@/pages/settings'
 import { StyleGuidePage } from '@/pages/style-guide'
 
@@ -89,6 +90,7 @@ function Shell(): JSX.Element {
               first anyway, but the order reads unambiguously. */}
           <Route path="/targets/:id" element={<TargetDetailPage />} />
           <Route path="/audit" element={<AuditPage />} />
+          <Route path="/rules" element={<RulesPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/style-guide" element={<StyleGuidePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

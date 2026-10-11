@@ -45,6 +45,8 @@ class AdminContext:
     database: Database
     settings_store: SettingsStore
     login_limiter: auth_service.LoginRateLimiter
+    # Separate budget for GET /api/captcha. See CAPTCHA_REQUESTS_PER_WINDOW.
+    captcha_limiter: auth_service.LoginRateLimiter
     # Single-use bookkeeping for CAPTCHA challenges. In-process, like
     # the rate limiter, so a restart clears it: correct, because a
     # restart already invalidates every session and an outstanding
@@ -141,6 +143,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database=database,
         settings_store=store,
         login_limiter=auth_service.LoginRateLimiter(),
+        captcha_limiter=auth_service.LoginRateLimiter(
+            max_attempts=auth_service.CAPTCHA_REQUESTS_PER_WINDOW,
+        ),
         # The panel must not be able to register a target the bot would
         # refuse to scan.
         authorizer=Authorizer(settings.allowed_cidrs),

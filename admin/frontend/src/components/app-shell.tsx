@@ -14,6 +14,7 @@ import {
   Menu,
   Paintbrush,
   ScrollText,
+  Shield as ShieldIcon,
   Search,
   Settings as SettingsIcon,
   Sun,
@@ -40,6 +41,9 @@ const NAV: NavItem[] = [
   { to: '/telegram-users', label: 'Telegram Users', icon: UsersIcon },
   { to: '/targets', label: 'Targets', icon: Network },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  // Between the audit log and settings, because that is where an operator
+  // looks when asking "why was that scan refused" or "what can I scan".
+  { to: '/rules', label: 'Rules', icon: ShieldIcon },
   { to: '/settings', label: 'Settings', icon: SettingsIcon },
   // Imports every Phase 1 component so they are built and shipped rather
   // than tree-shaken away as unused exports.

@@ -111,21 +111,38 @@ export function LoginPage(): JSX.Element {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-bg px-4 py-10">
-      {/* Subtle green-tinted gradient wash; pointer-events-none so it can
-          never swallow a click on the form. */}
+      {/* The light source the depth cues are read against. A single soft pool
+          above and behind the card, so the card's bevel and drop shadow have
+          something to be lit by -- a shadow on an evenly lit page reads as a
+          smudge rather than as height.
+
+          pointer-events-none so it can never swallow a click on the form. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
+        className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(60rem 40rem at 15% 10%, rgb(var(--primary) / 0.16), transparent 60%),' +
-            'radial-gradient(50rem 35rem at 85% 90%, rgb(var(--info) / 0.14), transparent 60%)',
+            'radial-gradient(42rem 30rem at 50% -8%, rgb(var(--primary) / 0.2), transparent 62%),' +
+            'radial-gradient(60rem 40rem at 15% 10%, rgb(var(--primary) / 0.13), transparent 60%),' +
+            'radial-gradient(50rem 35rem at 85% 90%, rgb(var(--info) / 0.12), transparent 60%)',
         }}
       />
 
       <div className={shake ? 'relative w-full max-w-sm animate-shake' : 'relative w-full max-w-sm'}>
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/25">
+          {/* The mark is a raised tile, not a flat swatch: an inset highlight on
+              top and a coloured shadow underneath is what gives the icon a
+              surface to sit on. */}
+          <div
+            className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary"
+            style={{
+              boxShadow:
+                'inset 0 1px 0 rgb(255 255 255 / 0.3),' +
+                'inset 0 -1px 0 rgb(0 0 0 / 0.15),' +
+                '0 8px 20px -8px rgb(var(--primary) / 0.7),' +
+                '0 2px 4px -2px rgb(0 0 0 / 0.5)',
+            }}
+          >
             <Activity className="h-6 w-6 text-primary-fg" />
           </div>
           <h1 className="text-xl font-semibold text-fg">NetSentinel</h1>
@@ -137,7 +154,7 @@ export function LoginPage(): JSX.Element {
             syncVisibleValues()
             void handleSubmit(onSubmit)(event)
           }}
-          className="card space-y-4 bg-surface/70 p-6 backdrop-blur-xl"
+          className="surface-raised space-y-4 p-6"
           noValidate
         >
           {serverError ? (
@@ -195,8 +212,13 @@ export function LoginPage(): JSX.Element {
             <div>
               <Label htmlFor="captcha-answer">Security question</Label>
               <div className="flex items-stretch gap-2">
+                {/* A well, not a panel. This was `bg-muted/40`, which on the
+                    dark theme renders *lighter* than the card around it, so the
+                    CAPTCHA question looked like a card sitting on the card and
+                    the layering read backwards. The answer input beside it is
+                    already a well; the two halves of one control should match. */}
                 <span
-                  className="flex select-none items-center rounded-md border border-border bg-muted/40 px-3 font-mono text-sm text-fg"
+                  className="inset-well flex select-none items-center rounded-md border border-input bg-bg px-3 font-mono text-sm text-fg"
                   aria-hidden
                 >
                   {challenge.question}
