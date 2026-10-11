@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Copy, Info, Moon, Network, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
+import { SERIES, SERIES_DASH } from '@/lib/chart'
 import { useUIStore } from '@/store/ui'
 import { cn, formatNumber } from '@/lib/utils'
 import {
@@ -140,20 +141,24 @@ export function StyleGuidePage(): JSX.Element {
 
       <Section
         title="Chart series palette"
-        description="distinct from the status colours; every series also carries its own dash"
+        description="distinct from the status colours; each series carries its own dash"
       >
+        {/* Rendered from SERIES / SERIES_DASH rather than a hand-written list.
+
+            The previous version spelled out both the token names and the dash
+            patterns inline, which was a third copy of a vocabulary that already
+            lives in lib/chart.ts. It drifted: the guide showed six marks with
+            three dash patterns, and described every series as carrying its own
+            dash, while `SERIES_DASH` only had entries for the three series that
+            happened to be plotted. Anything built from the guide and checked
+            against the charts would have found solid lines where the guide
+            promised a dash. */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(
-            [
-              ['chart-1', 'scans'],
-              ['chart-2', 'hosts'],
-              ['chart-3', 'changes'],
-              ['chart-4', 'services'],
-              ['chart-5', 'reserved'],
-              ['danger', 'failed'],
-            ] as const
-          ).map(([token, use]) => (
-            <div key={token} className="flex items-center gap-3 rounded-md border border-border bg-surface p-3">
+          {(Object.keys(SERIES) as Array<keyof typeof SERIES>).map((name) => (
+            <div
+              key={name}
+              className="flex items-center gap-3 rounded-md border border-border bg-surface p-3"
+            >
               {/* The dash is drawn as an SVG so the guide shows the actual
                   encoding a chart uses, not a rectangle. */}
               <svg width="44" height="12" aria-hidden className="shrink-0">
@@ -162,20 +167,47 @@ export function StyleGuidePage(): JSX.Element {
                   y1="6"
                   x2="43"
                   y2="6"
-                  stroke={`rgb(var(--${token}))`}
+                  stroke={SERIES[name]}
                   strokeWidth="2"
-                  strokeDasharray={
-                    token === 'danger' ? '1 3' : token === 'chart-3' ? '4 3' : '0'
-                  }
+                  strokeDasharray={SERIES_DASH[name]}
                 />
               </svg>
               <div className="min-w-0">
-                <p className="text-sm font-medium">--{token}</p>
-                <p className="text-xs text-muted">{use}</p>
+                <p className="text-sm font-medium">{name}</p>
+                <p className="text-xs text-muted">
+                  {SERIES[name].replace(/^rgb\(var\(|rgb\(var\(--(chart-\d)\)\)$/g,
+                    '--$1')}
+                </p>
               </div>
             </div>
           ))}
+          {/* --chart-5 has no series yet. Shown so the palette documents what
+              exists rather than only what is currently plotted. */}
+          <div className="flex items-center gap-3 rounded-md border border-dashed border-border bg-surface p-3">
+            <svg width="44" height="12" aria-hidden className="shrink-0">
+              <line
+                x1="1"
+                y1="6"
+                x2="43"
+                y2="6"
+                stroke="rgb(var(--chart-5))"
+                strokeWidth="2"
+                strokeDasharray="2 2"
+              />
+            </svg>
+            <div className="min-w-0">
+              <p className="text-sm font-medium">--chart-5</p>
+              <p className="text-xs text-muted">reserved — no series uses it yet</p>
+            </div>
+          </div>
         </div>
+        <p className="max-w-3xl text-xs text-faint">
+          Six steps, because a chart needs hues that are distinguishable from
+          each other — not six colours that each mean something. A green and a
+          red line are the classic deuteranopia collision, which is why every
+          series also carries a distinct dash: the charts have to survive
+          without colour vision and in greyscale print.
+        </p>
       </Section>
 
       <Section

@@ -14,17 +14,27 @@ export function initials(value: string | null | undefined): string {
 }
 
 /**
- * Deterministic colour for an avatar, so a given user always gets the
- * same colour across sessions and pages.
+ * Deterministic avatar colour, so a given user gets the same tint across
+ * sessions and pages.
+ *
+ * Reads the `--avatar-N` / `--avatar-N-fg` tokens rather than hardcoding
+ * Tailwind palette steps. The previous list was `text-{hue}-400` on
+ * `{hue}-500/15`, which was tuned for the dark surface: on white, rose-400
+ * sits at about 2.5:1, and an avatar's initials are text. There was no
+ * light-theme variant at all -- the palette was simply dark-only and nothing
+ * checked it.
+ *
+ * The hash is unchanged, so a user keeps the same hue they had before.
  */
 const AVATAR_COLORS = [
-  'bg-emerald-500/15 text-emerald-400',
-  'bg-sky-500/15 text-sky-400',
-  'bg-amber-500/15 text-amber-400',
-  'bg-violet-500/15 text-violet-400',
-  'bg-rose-500/15 text-rose-400',
-  'bg-teal-500/15 text-teal-400',
+  'bg-avatar-1 text-avatar-1-fg',
+  'bg-avatar-2 text-avatar-2-fg',
+  'bg-avatar-3 text-avatar-3-fg',
+  'bg-avatar-4 text-avatar-4-fg',
+  'bg-avatar-5 text-avatar-5-fg',
+  'bg-avatar-6 text-avatar-6-fg',
 ]
+
 
 export function avatarColor(seed: string | number): string {
   const key = String(seed)

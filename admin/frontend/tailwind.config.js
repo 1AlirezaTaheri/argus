@@ -57,6 +57,31 @@ export default {
           DEFAULT: 'rgb(var(--success) / <alpha-value>)',
           soft: 'rgb(var(--success-soft) / <alpha-value>)',
         },
+        // Avatar tints. Six hues so a given user keeps the same colour across
+        // sessions, declared per theme rather than taken from the raw Tailwind
+        // palette: `text-{hue}-400` on `{hue}-500/15` was tuned for the dark
+        // surface and dropped to ~2.5:1 on white, and an avatar's initials are
+        // text. Each pair is contrast-checked by tests/test_frontend_contrast.
+        //
+        // Two namespaces rather than one nested object, because `bg-avatar-1`
+        // and `text-avatar-1-fg` are different utilities and Tailwind's nested
+        // form would give `text-avatar-1-DEFAULT` for the foreground.
+        avatar: {
+          1: 'rgb(var(--avatar-1) / <alpha-value>)',
+          2: 'rgb(var(--avatar-2) / <alpha-value>)',
+          3: 'rgb(var(--avatar-3) / <alpha-value>)',
+          4: 'rgb(var(--avatar-4) / <alpha-value>)',
+          5: 'rgb(var(--avatar-5) / <alpha-value>)',
+          6: 'rgb(var(--avatar-6) / <alpha-value>)',
+        },
+        'avatar-fg': {
+          1: 'rgb(var(--avatar-1-fg) / <alpha-value>)',
+          2: 'rgb(var(--avatar-2-fg) / <alpha-value>)',
+          3: 'rgb(var(--avatar-3-fg) / <alpha-value>)',
+          4: 'rgb(var(--avatar-4-fg) / <alpha-value>)',
+          5: 'rgb(var(--avatar-5-fg) / <alpha-value>)',
+          6: 'rgb(var(--avatar-6-fg) / <alpha-value>)',
+        },
         // Chart series palette. Exposed as `chart-1`..`chart-5` so a chart can
         // be restyled from one place instead of each series naming a colour
         // inline. These are distinct from the status colours above on purpose:

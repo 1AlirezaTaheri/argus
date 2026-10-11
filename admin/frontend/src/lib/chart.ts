@@ -68,18 +68,31 @@ export const SERIES = {
 } as const
 
 /**
- * The dash patterns paired with SERIES, in the same order.
+ * The dash patterns paired with SERIES, keyed the same way.
  *
  * Every chart here draws more than one series, and colour alone is not enough:
  * a green and a red line are the classic deuteranopia collision, and "failed
  * scans" is precisely the line a reader must not misread as "scans". Each series
  * therefore carries a distinct dash as well as a distinct hue, so the charts
  * stay readable without colour vision and still print correctly in greyscale.
+ *
+ * One entry per key of SERIES, and a test holds it that way. It used to carry
+ * only the three series currently plotted, which meant `hosts` and `services`
+ * had no dash at all -- a chart that drew `scans` alongside either of them
+ * would have rendered both solid, which is the exact collision the dashes
+ * exist to prevent. A vocabulary that is only complete for the data that
+ * happens to be present today is not a vocabulary.
+ *
+ * The patterns are chosen to differ in *rhythm* rather than only in length, so
+ * they stay distinguishable at a 2px stroke and at the reduced line width a
+ * small chart gets: solid, fine dot, medium dash, long dash, dash-dot.
  */
-export const SERIES_DASH = {
+export const SERIES_DASH: Record<keyof typeof SERIES, string> = {
   scans: '0',
   failed: '1 3',
   changes: '4 3',
+  hosts: '8 3',
+  services: '8 3 2 3',
 } as const
 
 /**
