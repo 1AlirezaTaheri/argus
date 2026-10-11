@@ -38,8 +38,8 @@ from workers.scan_worker import ScanJob, ScanWorker
 
 log = logging.getLogger(__name__)
 
-JOB_PREFIX = "netsentinel-scan"
-RETENTION_JOB_ID = "netsentinel-retention"
+JOB_PREFIX = "argus-scan"
+RETENTION_JOB_ID = "argus-retention"
 SCHEDULER_SHUTDOWN_TIMEOUT = 5.0
 
 

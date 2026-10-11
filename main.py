@@ -1,4 +1,4 @@
-"""NetSentinel entry point.
+"""Argus entry point.
 
 Loads and validates configuration, builds the Telegram application, then
 starts polling. Configuration errors are reported plainly instead of
@@ -37,7 +37,7 @@ for _noisy in ("httpx", "telegram", "telegram.ext", "apscheduler", "asyncio"):
 _handler = logging.StreamHandler()
 _handler.setFormatter(RequestIdFormatter("%(asctime)s %(name)s %(levelname)s %(message)s"))
 _handler.addFilter(RequestIdFilter())
-log = logging.getLogger("netsentinel")
+log = logging.getLogger("argus")
 log.handlers.clear()
 log.addHandler(_handler)
 log.propagate = False
@@ -52,7 +52,7 @@ def main() -> int:
 
     app = build_application(settings)
     log.info(
-        "Starting NetSentinel | %d allowed user(s) | profile=%s | "
+        "Starting Argus | %d allowed user(s) | profile=%s | "
         "schedule=%s | retention=%dd/%d | rate_limit=%ds",
         len(settings.allowed_user_ids),
         settings.default_profile,

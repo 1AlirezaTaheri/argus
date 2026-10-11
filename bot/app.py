@@ -1,4 +1,4 @@
-"""Composition root for the Telegram application.
+﻿"""Composition root for the Telegram application.
 
 Wires configuration, database, security, target registry, scan pipeline,
 the shared background worker, the scheduler, and runtime settings in one
@@ -13,6 +13,7 @@ import logging
 import httpx
 import telegram.error
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
 
 from admin.services import audit as audit_service
 from admin.services.settings_store import SettingsStore, seed as seed_settings
@@ -205,7 +206,7 @@ async def _post_shutdown(app) -> None:
 async def on_unhandled_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Catch-all for exceptions no handler anticipated.
 
-    Without this, python-telegram-bot logs the traceback and drops it — the
+    Without this, python-telegram-bot logs the traceback and drops it â€” the
     user sees nothing at all, which is indistinguishable from an
     unresponsive bot.
     """
@@ -296,13 +297,42 @@ def build_application(settings: Settings):
     # A transport-level retry for connection failures, applied to both the
     # request client and the long-polling client, since either can be the one
     # holding a dropped connection.
-    api_client = httpx.AsyncClient(
-        transport=httpx.HTTPTransport(retries=_HTTP_CONNECT_RETRIES),
-        timeout=httpx.Timeout(20.0, connect=20.0),
+    #
+    # These must be `HTTPXRequest`, not a bare `httpx.AsyncClient`.
+    # `ApplicationBuilder.request()` expects a `BaseRequest`, which owns an
+    # initialize()/shutdown() lifecycle the Application calls on both clients;
+    # an httpx client has neither, so the bot died at startup with
+    # "'AsyncClient' object has no attribute 'initialize'" before it ever
+    # reached getUpdates.
+    #
+    # `httpx_kwargs` is forwarded into the httpx.AsyncClient that HTTPXRequest
+    # builds, so the retrying transport still gets through.
+    #
+    # `AsyncHTTPTransport`, not `HTTPTransport`. PTB drives an AsyncClient, and
+    # handing it the synchronous transport gets as far as the first request and
+    # then fails with "'HTTPTransport' object has no attribute
+    # 'handle_async_request'" -- which is a different crash from the one that
+    # got us here, and just as total.
+    #
+    # Where the retry count lives is also worth knowing: HTTPTransport passes
+    # `retries` straight to its ConnectionPool, so it is on `transport._pool`
+    # and not anywhere obvious. Two probes reported a correctly configured
+    # client as unconfigured before that was found.
+    api_client = HTTPXRequest(
+        connect_timeout=20.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+        httpx_kwargs={
+            "transport": httpx.AsyncHTTPTransport(retries=_HTTP_CONNECT_RETRIES),
+        },
     )
-    updates_client = httpx.AsyncClient(
-        transport=httpx.HTTPTransport(retries=_HTTP_CONNECT_RETRIES),
-        timeout=httpx.Timeout(20.0, connect=20.0),
+    updates_client = HTTPXRequest(
+        connect_timeout=20.0,
+        read_timeout=20.0,
+        write_timeout=20.0,
+        httpx_kwargs={
+            "transport": httpx.AsyncHTTPTransport(retries=_HTTP_CONNECT_RETRIES),
+        },
     )
 
     app = (

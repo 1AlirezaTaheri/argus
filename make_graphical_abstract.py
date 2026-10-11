@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate the graphical abstract (PNG) for NetSentinel.
+Generate the graphical abstract (PNG) for Argus.
 
 Supersedes the earlier seven-layer stack, which described the MVP: it showed
 only a chat command reaching nmap, and predates the rule engine, the Mini App
@@ -216,7 +216,7 @@ FOOTER = ("Every request is authenticated, authorised, scope-checked and rate-li
 
 
 def build() -> graphviz.Digraph:
-    g = graphviz.Digraph(name="netsentinel_graphical_abstract", format="png")
+    g = graphviz.Digraph(name="argus_graphical_abstract", format="png")
     g.attr(rankdir="TB", bgcolor=BG, pad="0.4", nodesep="0.22", ranksep="0.40")
     g.attr("node", shape="none", fontname="Helvetica", margin="0")
     g.attr("edge", fontname="Helvetica", fontsize="8", fontcolor=MUTED,
@@ -224,7 +224,7 @@ def build() -> graphviz.Digraph:
 
     # ---- Title ---------------------------------------------------------
     g.node("title", shape="plaintext", fontcolor=FG, fontsize="20",
-           label=('<<B>NetSentinel</B><BR ALIGN="CENTER"/>'
+           label=('<<B>Argus</B><BR ALIGN="CENTER"/>'
                   '<FONT POINT-SIZE="12" COLOR="%s">A policy-gated network '
                   'scanner for Telegram, with a Mini App and an operator panel'
                   '</FONT>>' % MUTED))

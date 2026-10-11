@@ -1,4 +1,4 @@
-"""NetSentinel — application configuration.
+"""Argus — application configuration.
 
 All runtime configuration is read from environment variables and validated
 here, in one place. Nothing else in the codebase should touch
@@ -172,7 +172,7 @@ class Settings:
             allowed_cidrs=_csv_strs("ALLOWED_CIDRS"),
             database_url=_optional(
                 "DATABASE_URL",
-                "postgresql+psycopg://netsentinel:netsentinel@db:5432/netsentinel",
+                "postgresql+psycopg://argus:argus@db:5432/argus",
             ),
             nmap_binary=_optional("NMAP_BINARY", "nmap"),
             scan_timeout_seconds=_positive("SCAN_TIMEOUT_SECONDS", "60"),

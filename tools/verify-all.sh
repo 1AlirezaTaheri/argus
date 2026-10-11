@@ -6,9 +6,12 @@
 # output looked plausible and its failures were about the old code, which is
 # worse than no output. So the build's exit status is checked here, before the
 # verifier is allowed to run at all.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 # Counted steps. The old script printed "done" unconditionally, so a run that
 # failed four checks above still ended looking like a pass -- which is the one
@@ -39,7 +42,7 @@ echo "=== typecheck ==="
 # tail's status, so a genuine type error passed the gate and the build ran
 # anyway -- which is how a failed build once got verified against a stale
 # bundle.
-tsc_out="$(cd admin/frontend && bash "$DIR/tsc.sh" 2>&1)"
+tsc_out="$(cd admin/frontend && bash "$HERE/tsc.sh" 2>&1)"
 tsc_rc=$?
 echo "$tsc_out" | tail -4
 if [ "$tsc_rc" != "0" ]; then
@@ -63,51 +66,55 @@ docker compose ps --format 'table {{.Service}}\t{{.Status}}'
 
 echo
 echo "=== verify the deployed bundle ==="
-TAIL_LINES=30 run_step "verify-ui" bash "$DIR/verify-ui.sh"
+TAIL_LINES=30 run_step "verify-ui" bash "$HERE/verify-ui.sh"
 
 echo
 echo "=== verify the live dashboard ==="
-TAIL_LINES=40 run_step "verify-dashboard" bash "$DIR/verify-dashboard.sh"
+TAIL_LINES=40 run_step "verify-dashboard" bash "$HERE/verify-dashboard.sh"
 
 echo
 echo "=== verify the target detail API ==="
-TAIL_LINES=45 run_step "verify-target-detail-api" bash "$DIR/verify-target-detail-api.sh"
+TAIL_LINES=45 run_step "verify-target-detail-api" bash "$HERE/verify-target-detail-api.sh"
 
 echo
 echo "=== verify the target detail UI in the bundle ==="
-TAIL_LINES=30 run_step "verify-target-detail" bash "$DIR/verify-target-detail.sh"
+TAIL_LINES=30 run_step "verify-target-detail" bash "$HERE/verify-target-detail.sh"
 
 echo
 echo "=== verify panel scanning ==="
-TAIL_LINES=40 run_step "verify-panel-scan" bash "$DIR/verify-panel-scan.sh"
+TAIL_LINES=40 run_step "verify-panel-scan" bash "$HERE/verify-panel-scan.sh"
 
 echo
 echo "=== verify mobile navigation ==="
-TAIL_LINES=25 run_step "verify-mobile-nav" bash "$DIR/verify-mobile-nav.sh"
+TAIL_LINES=25 run_step "verify-mobile-nav" bash "$HERE/verify-mobile-nav.sh"
 
 echo
 echo "=== verify every route actually renders in a browser ==="
-TAIL_LINES=20 run_step "verify-render" bash "$DIR/verify-render.sh"
+TAIL_LINES=20 run_step "verify-render" bash "$HERE/verify-render.sh"
 
 echo
 echo "=== verify the theme is applied before first paint ==="
-TAIL_LINES=16 run_step "verify-theme" bash "$DIR/verify-theme.sh"
+TAIL_LINES=16 run_step "verify-theme" bash "$HERE/verify-theme.sh"
 
 echo
 echo "=== verify the dropdowns work ==="
-TAIL_LINES=22 run_step "verify-selects" bash "$DIR/verify-selects.sh"
+TAIL_LINES=22 run_step "verify-selects" bash "$HERE/verify-selects.sh"
+
+echo
+echo "=== verify the style guide ==="
+run_step "guide" bash "$HERE/verify-guide.sh"
 
 echo
 echo "=== verify the Mini App ==="
-run_step "miniapp" bash "$DIR/verify-miniapp.sh"
+run_step "miniapp" bash "$HERE/verify-miniapp.sh"
 
 echo
 echo "=== verify the rules screen ==="
-run_step "rules" bash "$DIR/verify-rules.sh"
+run_step "rules" bash "$HERE/verify-rules.sh"
 
 echo
 echo "=== verify the panel's chrome controls ==="
-run_step "buttons" bash "$DIR/verify-buttons.sh"
+run_step "buttons" bash "$HERE/verify-buttons.sh"
 
 echo
 echo "================================"

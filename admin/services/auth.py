@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_TTL_SECONDS = 8 * 3600
-COOKIE_NAME = "netsentinel_admin"
+COOKIE_NAME = "argus_admin"
 MIN_PASSWORD_LENGTH = 12
 
 _pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")

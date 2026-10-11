@@ -4,9 +4,12 @@
 # The bundle is minified, so this greps for authored strings and for the route
 # paths rather than for symbols. Every emitted chunk is searched, because Vite
 # code-splits.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 base="https://127.0.0.1:8443"
 fail=0

@@ -2,6 +2,14 @@ services:
   db:
     image: postgres:16-alpine
     environment:
+      # Deliberately still the pre-rename name.
+      #
+      # Postgres only applies POSTGRES_DB when it first initialises an empty
+      # data directory, so on the existing `dbdata` volume a new value is
+      # ignored and that database is never created -- while DATABASE_URL, which
+      # is read at runtime, would immediately point at a database that does not
+      # exist. Renaming this is a dump/restore with a coordinated cutover, not a
+      # find-and-replace, so it is left alone deliberately.
       POSTGRES_USER: netsentinel
       POSTGRES_PASSWORD: netsentinel
       POSTGRES_DB: netsentinel

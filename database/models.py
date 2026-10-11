@@ -1,4 +1,4 @@
-"""SQLAlchemy models — the canonical data model for NetSentinel.
+"""SQLAlchemy models — the canonical data model for Argus.
 
 Portable types only (no PostgreSQL-specific constructs) so the same models
 run against SQLite in tests and PostgreSQL in production.

@@ -100,7 +100,28 @@ class TestNoInlineScript:
         assert script.exists(), f"{script} is referenced but does not exist"
         body = script.read_text(encoding="utf-8")
         assert "data-theme" in body, "theme.js never sets data-theme"
-        assert "ns-theme" in body, "theme.js never reads the stored preference"
+        # The current key, not the pre-rename one. Both strings are present in
+        # theme.js after the rename -- the old key is still read so existing
+        # preferences survive -- so asserting the old name would keep passing
+        # while checking nothing.
+        assert "argus-theme" in body, "theme.js never reads the stored preference"
+
+    def test_theme_script_still_reads_the_pre_rename_key(self) -> None:
+        """The migration is a requirement, not an accident of the rename.
+
+        Renaming a localStorage key outright silently resets every existing
+        user's chosen theme to their OS default. Nothing errors and the page
+        still renders correctly, so the only thing holding this in place is a
+        test.
+        """
+        body = (FRONTEND / "public/theme.js").read_text(encoding="utf-8")
+        assert "ns-theme" in body, (
+            "theme.js no longer reads the pre-rename key; existing users' "
+            "stored theme preference will be discarded"
+        )
+        assert "argus-theme" in body, (
+            "the new key is gone too, so nothing is being read at all"
+        )
 
     def test_theme_script_is_not_deferred(self) -> None:
         """A module or a defer/async attribute would run after first paint."""

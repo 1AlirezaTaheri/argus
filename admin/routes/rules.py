@@ -235,7 +235,7 @@ async def export_rules(request: Request,
         content=__import__("json").dumps(payload, indent=2, ensure_ascii=False),
         media_type="application/json",
         headers={
-            "Content-Disposition": 'attachment; filename="netsentinel-rules.json"'
+            "Content-Disposition": 'attachment; filename="argus-rules.json"'
         },
     )
 

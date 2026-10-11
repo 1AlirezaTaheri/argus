@@ -95,7 +95,7 @@ function Authed(): JSX.Element {
 
   return (
     <Routes>
-      <Route element={<AppShell title="NetSentinel" />}>
+      <Route element={<AppShell title="Argus" />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/targets" element={<TargetsPage />} />
         <Route path="/scan" element={<ScanPage />} />

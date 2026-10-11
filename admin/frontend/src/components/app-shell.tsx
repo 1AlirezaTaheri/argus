@@ -164,7 +164,7 @@ export function Sidebar({
           </div>
           {!collapsed ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-fg">NetSentinel</p>
+              <p className="truncate text-sm font-semibold text-fg">Argus</p>
               <p className="truncate text-[11px] text-muted">admin panel</p>
             </div>
           ) : null}

@@ -30,9 +30,9 @@ COPY workers/    ./workers/
 COPY admin/       ./admin/
 
 # Drop privileges: the bot needs no write access to its own code.
-RUN useradd --create-home --uid 10001 netsentinel \
-    && chown -R netsentinel:netsentinel /app
-USER netsentinel
+RUN useradd --create-home --uid 10001 argus \
+    && chown -R argus:argus /app
+USER argus
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

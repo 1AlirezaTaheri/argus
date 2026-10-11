@@ -1,1 +1,1 @@
-"""NetSentinel configuration package."""
+"""Argus configuration package."""

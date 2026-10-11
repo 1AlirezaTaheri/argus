@@ -107,7 +107,7 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         details={"format": suffix, "scans": len(rows)},
     )
 
-    filename = f"netsentinel_{_safe_filename(target.name)}.{suffix}"
+    filename = f"argus_{_safe_filename(target.name)}.{suffix}"
     payload = content.encode("utf-8")
 
     # Telegram caps documents at 50 MB; guard before spending the upload.

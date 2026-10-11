@@ -1,8 +1,11 @@
 #!/bin/bash
 # Verify mobile navigation and the scan controls in the deployed SPA.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 base="https://127.0.0.1:8443"
 fail=0

@@ -1,8 +1,11 @@
 #!/bin/bash
 # Verify Caddy: HTTPS origin, plain-HTTP origin untouched, tunnel intact.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 fail=0
 chk() { # chk <label> <expected> <actual>
@@ -25,11 +28,11 @@ echo
 echo "### TLS is real, not a redirect or a plain-HTTP passthrough"
 chk "scheme negotiated"          https "$(curl -sk -o /dev/null -w '%{scheme}' https://127.0.0.1:8443/admin)"
 chk "TLS version 1.2+"           yes "$(curl -sk -o /dev/null -w '%{ssl_verify_result}' https://127.0.0.1:8443/admin >/dev/null; echo yes)"
-cert="$(echo | openssl s_client -connect 127.0.0.1:8443 -servername netsentinel.local 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName 2>/dev/null)"
+cert="$(echo | openssl s_client -connect 127.0.0.1:8443 -servername argus.local 2>/dev/null | openssl x509 -noout -subject -issuer -ext subjectAltName 2>/dev/null)"
 echo "  certificate:"
 echo "$cert" | sed 's/^/    /'
 chk "issued by internal CA"      yes "$(echo "$cert" | grep -qi 'Caddy Local Authority' && echo yes || echo no)"
-chk "SAN has netsentinel.local"  yes "$(echo "$cert" | grep -q 'netsentinel.local' && echo yes || echo no)"
+chk "SAN has argus.local"  yes "$(echo "$cert" | grep -q 'argus.local' && echo yes || echo no)"
 
 echo
 echo "### Security headers survive the proxy hop"

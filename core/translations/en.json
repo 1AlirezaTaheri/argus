@@ -1,6 +1,6 @@
 {
   "lang.name": "English",
-  "start.greeting": "Hello! I am NetSentinel — your network security monitoring assistant.\nKnow what changed, and what deserves your attention.",
+  "start.greeting": "Hello! I am Argus — your network security monitoring assistant.\nKnow what changed, and what deserves your attention.",
   "start.hint": "Send /help to get started.",
   "help.title": "All commands",
   "help.profiles": "Scan profiles:",
@@ -88,7 +88,7 @@
   "status.empty": "No active scans.",
   "status.header": "Active scans:",
   "status.item": "{icon} #{job_id} {target} [{profile}] {state}{detail}{scheduled}",
-  "health.title": "🩺 NetSentinel health",
+  "health.title": "🩺 Argus health",
   "health.db_ok": "  database    : ✅ reachable",
   "health.db_fail": "  database    : ❌ {error}",
   "health.scheduler": "  scheduler   : {state} ({count} schedule(s) enabled)",
@@ -140,5 +140,5 @@
   "app.button": "📱 Open the dashboard",
   "app.unavailable": "📱 The dashboard is not configured on this bot yet.\nThe operator has to set MINIAPP_URL.",
   "app.opened_hint": "Tap the button below to open the dashboard.",
-  "app.title": "NetSentinel dashboard"
+  "app.title": "Argus dashboard"
 }

@@ -1,16 +1,19 @@
 #!/bin/bash
 # Capture the panel's pages in both themes, for judging a visual change.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     docker pull --quiet "$IMAGE" >/dev/null || { echo "SKIP: cannot pull $IMAGE"; exit 0; }
 fi
 
-SHOTS="${SHOT_DIR:-/tmp/netsentinel-shots}"
+SHOTS="${SHOT_DIR:-/tmp/argus-shots}"
 mkdir -p "$SHOTS"
 # The container writes as root; without this the next run cannot clean up.
 chmod 777 "$SHOTS"
@@ -19,7 +22,7 @@ docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="${TARGET_BASE:-https://127.0.0.1:8443}" \
     -e SHOT_DIR=/shots \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/shoot_pages.js:/app/shoot_pages.js:ro" \
     -v "$SHOTS:/shots" \
     -w /usr/src/app \

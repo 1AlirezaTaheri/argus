@@ -84,9 +84,9 @@ RUN rm -f /app/admin/templates.py \
     && rm -rf /app/admin/templates /app/admin/static /app/admin/routes/pages.py
 
 # Non-root: the panel needs no write access to its own code.
-RUN useradd --create-home --uid 10002 netsentinel \
-    && chown -R netsentinel:netsentinel /app
-USER netsentinel
+RUN useradd --create-home --uid 10002 argus \
+    && chown -R argus:argus /app
+USER argus
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

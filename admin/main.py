@@ -29,7 +29,7 @@ _handler.setFormatter(
     RequestIdFormatter("%(asctime)s %(name)s %(levelname)s %(message)s")
 )
 _handler.addFilter(RequestIdFilter())
-log = logging.getLogger("netsentinel.admin")
+log = logging.getLogger("argus.admin")
 log.handlers.clear()
 log.addHandler(_handler)
 log.propagate = False

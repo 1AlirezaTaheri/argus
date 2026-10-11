@@ -145,8 +145,8 @@ export function LoginPage(): JSX.Element {
           >
             <Activity className="h-6 w-6 text-primary-fg" />
           </div>
-          <h1 className="text-xl font-semibold text-fg">NetSentinel</h1>
-          <p className="mt-1 text-sm text-muted">Network intelligence &amp; security monitoring</p>
+          <h1 className="text-xl font-semibold text-fg">Argus</h1>
+          <p className="mt-1 text-sm text-muted">Continuous network change detection</p>
         </div>
 
         <form

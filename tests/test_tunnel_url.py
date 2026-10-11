@@ -75,9 +75,9 @@ class TestReadTunnelUrl:
 
     def test_a_named_tunnel_host_is_accepted(self, tmp_path) -> None:
         f = tmp_path / "tunnel-url.conf"
-        f.write_text("https://netsentinel.example.cfargotunnel.com", encoding="utf-8")
+        f.write_text("https://argus.example.cfargotunnel.com", encoding="utf-8")
         assert read_tunnel_url(str(f)) == (
-            "https://netsentinel.example.cfargotunnel.com"
+            "https://argus.example.cfargotunnel.com"
         )
 
     def test_a_trailing_path_is_stripped(self, tmp_path) -> None:

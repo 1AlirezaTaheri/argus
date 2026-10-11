@@ -159,7 +159,7 @@ export function SettingsPage(): JSX.Element {
               const url = URL.createObjectURL(blob)
               const anchor = document.createElement('a')
               anchor.href = url
-              anchor.download = 'netsentinel-export.json'
+              anchor.download = 'argus-export.json'
               anchor.click()
               URL.revokeObjectURL(url)
               toast('Exported')
@@ -174,7 +174,7 @@ export function SettingsPage(): JSX.Element {
 
       <section className="card space-y-2">
         <h2 className="text-[15px] font-semibold">About</h2>
-        <p className="text-[13px] text-hint">NetSentinel Mini App 3.0.0</p>
+        <p className="text-[13px] text-hint">Argus Mini App 3.0.0</p>
         <p className="text-[12px] text-hint">
           Authentication is Telegram's signed initData. There is no password
           for this app, and the server re-checks the signature on every

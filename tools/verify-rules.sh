@@ -7,11 +7,14 @@
 # thing the user asked for does nothing, because "the row shows a toggle" and
 # "the rule is enforced" are different claims and only one of them is a bug the
 # user would notice.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "pulling $IMAGE (first run only)"
@@ -24,7 +27,7 @@ rm -rf "$SHOTS" && mkdir -p "$SHOTS" && chmod 777 "$SHOTS"
 docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="${TARGET_BASE:-https://127.0.0.1:8443}" \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/rules_probe.js:/app/rules_probe.js:ro" \
     -v "$SHOTS:/shots" \
     -w /usr/src/app \

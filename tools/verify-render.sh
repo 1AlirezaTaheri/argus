@@ -19,13 +19,15 @@
 #
 # The browser image is pulled on demand; it is only needed for this check, which
 # is why it is not part of the compose stack.
+
 set -uo pipefail
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 # Absolute, because this is mounted into a container: a relative path from
 # `bash tools/verify-render.sh` is not a valid volume name.
-HERE="$(cd "$(dirname "$0")" && pwd)"
-
-cd /home/alireza/nmap-bot
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
 
@@ -42,7 +44,7 @@ BASE="${TARGET_BASE:-https://127.0.0.1:8443}"
 docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="$BASE" \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/render_check.js:/app/render_check.js:ro" \
     -w /usr/src/app \
     --entrypoint sh "$IMAGE" -c '

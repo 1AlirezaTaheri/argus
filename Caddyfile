@@ -1,4 +1,4 @@
-# Caddy as a TLS terminator in front of the NetSentinel admin panel.
+# Caddy as a TLS terminator in front of the Argus admin panel.
 #
 # Purpose: the admin service speaks only plain HTTP. That is fine inside the
 # Docker network but not for anything a browser or an SSH-tunnel client
@@ -20,13 +20,13 @@
 #
 #   docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt .
 #
-#   Linux:   cp root.crt /usr/local/share/ca-certificates/netsentinel.crt
+#   Linux:   cp root.crt /usr/local/share/ca-certificates/argus.crt
 #            update-ca-certificates
 #   Windows: Import-Certificate -FilePath root.crt `
 #              -CertStoreLocation CertStore:\Root
 #   macOS:   double-click root.crt in Keychain Access -> "System" -> trust
 #
-# Then https://netsentinel.local:8443/admin verifies with no warning.
+# Then https://argus.local:8443/admin verifies with no warning.
 #
 # Deleting the caddy_data volume discards this CA. Every client that was
 # given the old root must be re-trusted, and Caddy issues a new one.
@@ -37,7 +37,7 @@
 # A certificate is valid only for the names in its SAN list, so every address
 # an operator might actually type has to appear:
 #
-#   netsentinel.local  the name to use
+#   argus.local  the name to use
 #   127.0.0.1          reached through an SSH tunnel
 #   192.168.174.128    the LAN address, from another machine
 #   172.18.0.6         Caddy's own address on the Docker network
@@ -104,7 +104,7 @@
 	}
 }
 
-https://netsentinel.local:8443, https://127.0.0.1:8443, https://192.168.174.128:8443, https://172.18.0.6:8443 {
+https://argus.local:8443, https://127.0.0.1:8443, https://192.168.174.128:8443, https://172.18.0.6:8443 {
 	tls internal
 
 	# Security headers are set by the application

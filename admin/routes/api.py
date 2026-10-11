@@ -563,7 +563,7 @@ async def export_audit(
         content=csv_text,
         media_type="text/csv",
         headers={
-            "Content-Disposition": 'attachment; filename="netsentinel-audit.csv"'
+            "Content-Disposition": 'attachment; filename="argus-audit.csv"'
         },
     )
 

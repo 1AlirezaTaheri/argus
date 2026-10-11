@@ -531,7 +531,7 @@ class TestExportImport:
     def test_export_is_a_download(self, auth_client):
         resp = auth_client.get("/api/rules/export")
         assert "attachment" in resp.headers.get("content-disposition", "")
-        assert "netsentinel-rules.json" in resp.headers["content-disposition"]
+        assert "argus-rules.json" in resp.headers["content-disposition"]
 
     def test_export_excludes_hits(self, auth_client):
         add_rule(auth_client)

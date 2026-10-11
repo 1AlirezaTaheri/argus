@@ -1,12 +1,15 @@
 #!/bin/bash
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
-IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
+IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
 docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="${TARGET_BASE:-https://127.0.0.1:8443}" \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/find_empty_section.js:/app/find_empty_section.js:ro" \
     -w /usr/src/app \
     --entrypoint sh "$IMAGE" -c '

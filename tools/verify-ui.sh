@@ -3,9 +3,12 @@
 # bundle, and every page still serves.
 #
 # The bundle is minified, so this greps for stable strings rather than symbols.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 fail=0
 chk() { if [ "$2" = "$3" ]; then echo "  [PASS] $1 -> $3"; else echo "  [FAIL] $1 -> $3 (want $2)"; fail=1; fi; }

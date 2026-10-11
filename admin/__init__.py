@@ -1,4 +1,4 @@
-"""NetSentinel admin panel — FastAPI service."""
+"""Argus admin panel — FastAPI service."""
 
 from __future__ import annotations
 

@@ -500,7 +500,7 @@ export function StyleGuidePage(): JSX.Element {
             Sidebar is {sidebarCollapsed ? 'collapsed' : 'expanded'}
           </Button>
           <Button variant="ghost" size="sm" onClick={() => {
-            void navigator.clipboard?.writeText('netsentinel').then(() => toast.success('Copied'))
+            void navigator.clipboard?.writeText('argus').then(() => toast.success('Copied'))
           }}>
             <Copy className="h-4 w-4" /> Copy test
           </Button>

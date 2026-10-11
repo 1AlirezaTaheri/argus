@@ -241,7 +241,7 @@ export function RulesPage(): JSX.Element {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `netsentinel-rules-${snapshot.exported_at.slice(0, 10)}.json`
+      link.download = `argus-rules-${snapshot.exported_at.slice(0, 10)}.json`
       link.click()
       URL.revokeObjectURL(url)
       toast.success(`Exported ${snapshot.rules.length} rule(s)`)

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to NetSentinel. Format follows
+All notable changes to Argus. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the project uses
 semantic versioning loosely.
 

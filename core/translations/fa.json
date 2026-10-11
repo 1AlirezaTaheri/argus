@@ -1,6 +1,6 @@
 {
   "lang.name": "فارسی",
-  "start.greeting": "سلام! من NetSentinel هستم — دستیار پایش امنیت شبکه.\nKnow what changed, and what deserves your attention.",
+  "start.greeting": "سلام! من Argus هستم — دستیار پایش امنیت شبکه.\nKnow what changed, and what deserves your attention.",
   "start.hint": "برای شروع /help را بزنید.",
   "help.title": "همه دستورات",
   "help.profiles": "پروفایل‌های اسکن:",
@@ -88,7 +88,7 @@
   "status.empty": "اسکن فعالی وجود ندارد.",
   "status.header": "اسکن‌های فعال:",
   "status.item": "{icon} #{job_id} {target} [{profile}] {state}{detail}{scheduled}",
-  "health.title": "🩺 سلامت NetSentinel",
+  "health.title": "🩺 سلامت Argus",
   "health.db_ok": "  پایگاه داده  : ✅ در دسترس",
   "health.db_fail": "  پایگاه داده  : ❌ {error}",
   "health.scheduler": "  زمان‌بند     : {state} ({count} زمان‌بند فعال)",
@@ -140,5 +140,5 @@
   "app.button": "📱 باز کردن داشبورد",
   "app.unavailable": "📱 داشبورد هنوز روی این ربات تنظیم نشده است.\nاپراتور باید MINIAPP_URL را تنظیم کند.",
   "app.opened_hint": "برای باز کردن داشبورد، دکمهٔ زیر را بزنید.",
-  "app.title": "داشبورد NetSentinel"
+  "app.title": "داشبورد Argus"
 }

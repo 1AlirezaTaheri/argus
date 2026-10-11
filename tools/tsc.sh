@@ -6,8 +6,12 @@
 # to downloading a different package literally named `tsc` from the registry
 # ("This is not the tsc command you are looking for"). The Dockerfile build is
 # unaffected; it installs its own.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot/admin/frontend
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 if [ ! -d node_modules ]; then
     echo "=== installing dev deps for the typecheck ==="

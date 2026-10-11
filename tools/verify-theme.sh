@@ -8,12 +8,14 @@
 #
 # This seeds a stored preference, loads the page, and reads data-theme at the
 # earliest moment the <html> element exists, before React has mounted.
+
 set -uo pipefail
 
-cd /home/alireza/nmap-bot
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "pulling $IMAGE (first run only)"

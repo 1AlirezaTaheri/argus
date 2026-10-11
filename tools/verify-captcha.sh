@@ -11,9 +11,11 @@
 # Prints no credentials. Exit code is non-zero if any check fails.
 set -uo pipefail
 
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
+
 cd "$(dirname "$0")/.."
-
-
 
 original="$(grep -o '^CAPTCHA_ENABLED=.*' .env || echo 'CAPTCHA_ENABLED=false')"
 echo "original: $original"

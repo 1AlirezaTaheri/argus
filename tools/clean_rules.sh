@@ -1,16 +1,19 @@
 #!/bin/bash
 # Remove probe residue from the rules list. Run by hand, not part of verify-all:
 # it is a cleanup, not a check.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="${TARGET_BASE:-https://127.0.0.1:8443}" \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/clean_rules.js:/app/clean_rules.js:ro" \
     -w /usr/src/app \
     --entrypoint sh "$IMAGE" -c '

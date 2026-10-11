@@ -125,8 +125,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info("Admin panel stopped")
 
     app = FastAPI(
-        title="NetSentinel Admin",
-        description="Web administration for the NetSentinel bot",
+        title="Argus Admin",
+        description="Web administration for the Argus bot",
         version="2.0.0",
         lifespan=lifespan,
     )

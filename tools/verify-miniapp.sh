@@ -5,11 +5,14 @@
 # The Mini App had no coverage at all. It is served by the admin process, so a
 # failure in its own build or in the /app catch-all would not surface in any
 # panel check.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "pulling $IMAGE (first run only)"

@@ -95,8 +95,8 @@ function parseChoiceKind(kind: string): Array<{ value: string; label: string }> 
 function LanguagePreview({ lang }: { lang: string }): JSX.Element {
   const sample =
     lang === 'en'
-      ? 'Hello! I am NetSentinel — your network security monitoring assistant.'
-      : 'سلام! من NetSentinel هستم — دستیار پایش امنیت شبکه.'
+      ? 'Hello! I am Argus — your network security monitoring assistant.'
+      : 'سلام! من Argus هستم — دستیار پایش امنیت شبکه.'
   return (
     <div className="mt-3 rounded-md border border-border bg-bg p-3">
       <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">

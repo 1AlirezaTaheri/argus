@@ -1,3 +1,7 @@
+// Migrated from 'ns-theme' when the project was renamed. The old key is still
+// read, because a browser cannot know that a user's stored preference under the
+// old name belongs to the new one -- renaming it outright would silently reset
+// every existing user's chosen theme to their OS default.
 // Applied before React mounts, so a light-theme user never sees a flash of the
 // dark background.
 //
@@ -25,7 +29,15 @@
 // this exists to prevent.
 ;(function () {
   try {
-    var stored = localStorage.getItem('ns-theme')
+    var stored = localStorage.getItem('argus-theme')
+    if (stored === null) {
+      // Pre-rename key. Read once, then written forward so the
+      // migration happens on load rather than on every load.
+      stored = localStorage.getItem('ns-theme')
+      if (stored !== null) {
+        try { localStorage.setItem('argus-theme', stored) } catch (e) {}
+      }
+    }
     var prefersLight = window.matchMedia('(prefers-color-scheme: light)').matches
     var theme =
       stored === 'light' || stored === 'dark'

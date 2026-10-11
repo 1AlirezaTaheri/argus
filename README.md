@@ -1,4 +1,4 @@
-# NetSentinel
+# Argus
 
 **Network Intelligence & Security Monitoring Assistant** — know what is on
 your network, what changed, and what deserves your attention.
@@ -316,7 +316,7 @@ Then point `MINIAPP_URL` at it and restart the bot and admin, since both read
 it:
 
 ```bash
-cd ~/nmap-bot
+cd ~/argus
 URL=$(docker compose logs tunnel | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | head -1)
 sed -i "s|^MINIAPP_URL=.*|MINIAPP_URL=$URL|" .env
 docker compose up -d --force-recreate bot admin
@@ -604,7 +604,7 @@ All config flows through `config/settings.py`; no other module reads
 ```bash
 # tests are excluded from the image, so bind-mount the tree and run as your uid
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" -w /src \
-  --entrypoint bash nmap-bot-bot \
+  --entrypoint bash argus-bot \
   -lc 'pip install -q --user pytest pytest-asyncio && PATH="$HOME/.local/bin:$PATH" python -m pytest -q'
 ```
 

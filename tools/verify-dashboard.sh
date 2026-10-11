@@ -1,12 +1,15 @@
 #!/bin/bash
 # Verify the deployed dashboard: the API endpoints, and that the new UI code is
 # actually in the served bundle.
+
 set -uo pipefail
-DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$DIR/.."
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 echo "### dashboard endpoints (live)"
-docker compose cp "$DIR/verify-dashboard-api.py" admin:/tmp/vda.py >/dev/null 2>&1
+docker compose cp "$HERE/verify-dashboard-api.py" admin:/tmp/vda.py >/dev/null 2>&1
 docker compose exec -T -w /app -e PYTHONPATH=/app admin python /tmp/vda.py 2>&1 \
   | grep -vE 'InsecureKeyLength|self\._jws|error reading bcrypt|most recent call|File "/usr/local|version = _bcrypt|AttributeError: module|StarletteDeprecation|from starlette'
 api_rc="${PIPESTATUS[0]}"

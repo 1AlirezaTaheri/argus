@@ -1,4 +1,4 @@
-"""Pytest configuration for NetSentinel.
+"""Pytest configuration for Argus.
 
 ``pytest-asyncio`` is configured in strict mode so async tests must be
 marked explicitly — an unmarked coroutine test would otherwise be silently

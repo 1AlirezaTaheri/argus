@@ -59,7 +59,8 @@ INDEX_HTML = (
 )
 
 THEME_JS = (
-    "(function(){try{var s=localStorage.getItem('ns-theme');"
+    "(function(){try{var s=localStorage.getItem('argus-theme');"
+    "if(s===null)s=localStorage.getItem('ns-theme');"
     "document.documentElement.setAttribute('data-theme',s==='light'?'light':'dark')"
     "}catch(e){}})()"
 )

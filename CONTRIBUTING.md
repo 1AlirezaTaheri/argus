@@ -1,4 +1,4 @@
-# Contributing to NetSentinel
+# Contributing to Argus
 
 ## Running the tests
 
@@ -8,9 +8,9 @@ against a temporary SQLite file per test.
 Inside the container (recommended, so versions match production):
 
 ```bash
-cd ~/nmap-bot
+cd ~/argus
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" -w /src \
-  --entrypoint bash nmap-bot-bot \
+  --entrypoint bash argus-bot \
   -lc 'pip install -q --user pytest pytest-asyncio && PATH="$HOME/.local/bin:$PATH" python -m pytest -q'
 ```
 
@@ -25,11 +25,11 @@ Run a subset or a single test by name:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" -w /src \
-  --entrypoint bash nmap-bot-bot \
+  --entrypoint bash argus-bot \
   -lc 'pip install -q --user pytest pytest-asyncio && PATH="$HOME/.local/bin:$PATH" python -m pytest tests/test_change_detector.py -v'
 
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/src" -w /src \
-  --entrypoint bash nmap-bot-bot \
+  --entrypoint bash argus-bot \
   -lc 'pip install -q --user pytest pytest-asyncio && PATH="$HOME/.local/bin:$PATH" python -m pytest -k retention -v'
 ```
 
@@ -110,7 +110,7 @@ credentials get published.
 ## Deployment
 
 ```bash
-cd ~/nmap-bot
+cd ~/argus
 docker compose up -d --build
 docker compose logs --tail=50 bot
 ```

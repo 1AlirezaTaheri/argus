@@ -13,11 +13,14 @@
 #
 # This asserts behaviour instead: the palette opens and filters, the theme
 # attribute flips, the account menu reports aria-expanded.
+
 set -uo pipefail
-cd /home/alireza/nmap-bot
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+cd "$REPO"
 
 IMAGE="${CHROME_IMAGE:-zenika/alpine-chrome:with-puppeteer}"
-HERE="$(cd "$(dirname "$0")" && pwd)"
 
 if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "pulling $IMAGE (first run only)"
@@ -27,7 +30,7 @@ fi
 docker run --rm --network host \
     -e NODE_PATH=/usr/src/app/node_modules \
     -e TARGET_BASE="${TARGET_BASE:-https://127.0.0.1:8443}" \
-    -v /home/alireza/nmap-bot/.env:/env/.env:ro \
+    -v "$REPO"/.env:/env/.env:ro \
     -v "$HERE/button_verify.js:/app/button_verify.js:ro" \
     -w /usr/src/app \
     --entrypoint sh "$IMAGE" -c '
