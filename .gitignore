@@ -29,6 +29,17 @@ legacy/
 
 # frontend build artefacts (the admin image runs its own npm build)
 node_modules/
+
+# A root-level package-lock.json is always an artefact, never a dependency
+# graph. npx writes one named for the mount point when the repository is
+# bind-mounted with a subdirectory as the working directory, and an empty
+# `{"name": "app", "packages": {}}` was committed here before that was noticed.
+#
+# Anchored to the root on purpose: admin/frontend/package-lock.json and
+# mini-app/package-lock.json are real and must stay tracked, since they are what
+# `npm ci` uses to pin the build. Ignoring the filename everywhere would
+# untrack those and quietly break the reproducibility they exist to provide.
+/package-lock.json
 admin/frontend/dist/
 *.tsbuildinfo
 npm-debug.log*
