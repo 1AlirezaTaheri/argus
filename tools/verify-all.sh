@@ -105,8 +105,25 @@ echo "=== verify the style guide ==="
 run_step "guide" bash "$HERE/verify-guide.sh"
 
 echo
+echo "=== verify no framework default paints over the design system ==="
+# Not a feature check. Tailwind's preflight supplies a border colour, a
+# placeholder colour and a ring colour that no file here mentions, so they are
+# invisible to every source-level test: they are only observable as computed
+# styles in a real browser, in both themes, on every page.
+run_step "defaults" bash "$HERE/verify-defaults.sh"
+
+echo
 echo "=== verify the Mini App ==="
 run_step "miniapp" bash "$HERE/verify-miniapp.sh"
+
+echo
+echo "=== verify the Mini App through the public tunnel ==="
+# Separate from the check above, and the reason it exists is worth stating once
+# more here: every other probe runs against https://127.0.0.1:8443, which is
+# local Caddy and never touches Cloudflare. The suite stayed all green through an
+# eleven-hour tunnel outage, because the broken component was not in the path
+# being tested. This is the only step that uses the hostname Telegram does.
+run_step "tunnel" bash "$HERE/verify-tunnel.sh"
 
 echo
 echo "=== verify the rules screen ==="

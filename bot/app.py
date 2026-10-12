@@ -24,6 +24,7 @@ from bot.handlers import schedule as schedule_handlers
 from bot.handlers import start as start_handlers
 from bot.handlers import status as status_handlers
 from bot.handlers import target as target_handlers
+from bot.heartbeat import Heartbeat
 from bot.messages import reports
 from config.settings import Settings
 from core.i18n import normalize_lang, reload_translations
@@ -171,6 +172,15 @@ async def _post_init(app) -> None:
 
     await worker.start(handler)
 
+    # A health check that can only see that the process exists cannot tell a
+    # running bot from a dead event loop, and this container's check was
+    # reading an environment variable -- so every real failure reported
+    # healthy. The heartbeat is written only after Telegram answers, which is
+    # the question worth asking.
+    heartbeat = Heartbeat(app.bot)
+    app.bot_data["heartbeat"] = heartbeat
+    heartbeat.start()
+
     if scheduler is not None:
         async def alert_sink(chat_id: int, text: str) -> None:
             await _deliver(app, chat_id, text)
@@ -193,6 +203,9 @@ async def _post_init(app) -> None:
 
 async def _post_shutdown(app) -> None:
     """Stop in dependency order so nothing is left mid-flight."""
+    heartbeat: Heartbeat | None = app.bot_data.get("heartbeat")
+    if heartbeat is not None:
+        await heartbeat.stop()
     scheduler: ScanScheduler | None = app.bot_data.get("scheduler")
     if scheduler is not None:
         await scheduler.stop()

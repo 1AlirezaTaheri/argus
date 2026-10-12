@@ -396,6 +396,31 @@ body {
     box-shadow: var(--inset-well);
   }
 
+  /* A surface floating free of the page, but flush to the viewport edge:
+     the mobile nav and the target detail panel.
+
+     Shares `.surface-raised`'s depth -- `--elevate-3` for the lit top edge and
+     the two-layer drop, `--sheen` for the gradient -- because a shadow alone
+     does not register on a near-black page and these are floating panels just
+     as the modals are.
+
+     Deliberately *not* `.surface-raised`: that applies `rounded-xl` and a full
+     border, and an edge slab has neither. Rounding the outer edge would reveal
+     the page through the corner, and a full border would draw a hairline along
+     the screen edge. Only the edge facing the content has a border, which is
+     why `border-l` / `border-r` stay with the call site.
+
+     It replaces `shadow-2xl`, which was Tailwind's published default --
+     `0 25px 50px -12px rgb(0 0 0 / .25)` -- because `2xl` is the one key the
+     `boxShadow` scale does not override. That is a hardcoded light-theme
+     shadow: on `#090c14` it darkens the background by 2/255 and reads as
+     nothing, and on white it is 25% black where the theme uses 14% slate. */
+  .surface-drawer {
+    @apply bg-surface;
+    box-shadow: var(--elevate-3);
+    background-image: var(--sheen);
+  }
+
   /* One focus treatment for the whole app. Every interactive element uses this
      instead of repeating focus-visible:ring-2 focus-visible:ring-primary/40,
      which was already drifting between near-identical spellings. */

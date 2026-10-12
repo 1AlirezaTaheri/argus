@@ -212,7 +212,7 @@ export function StyleGuidePage(): JSX.Element {
 
       <Section
         title="Depth"
-        description="Three elevations, one floating surface, one well"
+        description="Three elevations, two floating surfaces, one well"
       >
         <p className="mb-3 max-w-3xl text-sm text-muted">
           A drop shadow alone does not read as elevation on a near-black page:
@@ -258,6 +258,16 @@ export function StyleGuidePage(): JSX.Element {
                 A panel floating free of the page. The sheen is the second cue
                 and the one that still works where a shadow has no contrast to
                 work with.
+              </p>
+            </div>
+            <div className="surface-drawer border-l border-border p-4">
+              <p className="text-xs text-muted">surface-drawer</p>
+              <p className="mt-1 text-sm">
+                The same depth as the panel above, without its geometry: no
+                rounding and no border of its own, because this is a slab flush
+                to the viewport edge. Only the edge facing the content is
+                bordered -- <code className="font-mono">border-l</code> here,
+                <code className="font-mono"> border-r</code> on the navigation.
               </p>
             </div>
             <div className="inset-well rounded-lg border border-input bg-bg p-4">

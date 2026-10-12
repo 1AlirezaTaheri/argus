@@ -484,7 +484,7 @@ function TargetDrawer({
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <button className="flex-1 cursor-default bg-black/50 backdrop-blur-sm" aria-label="Close" onClick={onClose} />
-      <aside className="flex w-full max-w-lg flex-col border-l border-border bg-surface shadow-2xl animate-slide-in-right">
+      <aside className="flex w-full max-w-lg flex-col border-l border-border bg-surface surface-drawer animate-slide-in-right">
         <header className="flex items-start justify-between gap-3 border-b border-border p-4">
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-fg">{target.name}</h2>

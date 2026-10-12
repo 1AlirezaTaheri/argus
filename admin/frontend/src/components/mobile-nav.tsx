@@ -105,7 +105,7 @@ export function MobileNav({
         aria-modal="true"
         aria-label="Navigation"
         tabIndex={-1}
-        className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-border bg-surface shadow-2xl animate-slide-in-right"
+        className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-border bg-surface surface-drawer animate-slide-in-right"
       >
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <div className="flex items-center gap-2">

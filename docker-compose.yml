@@ -36,12 +36,33 @@ services:
       DATABASE_URL: postgresql+psycopg://netsentinel:netsentinel@db:5432/netsentinel
     volumes:
       - logs:/app/logs
+      # The hostname the running tunnel was assigned. Read-only: the bot
+      # only ever reads it, and never writes it.
+      - tunnel_url:/tunnel:ro
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import sys; sys.exit(0 if __import__('os').environ.get('TELEGRAM_BOT_TOKEN') else 1)\""]
+      # Has the heartbeat been written recently?
+      #
+      # `find -mmin` rather than a Python one-liner. The previous check was a
+      # YAML folded scalar containing a multi-line program, and folding joined
+      # the lines with a space -- so the newline after the opening quote became
+      # a space inside the string, and Python received
+      #
+      #     import os,pathlib,time,sys; ...
+      #
+      # indented, and answered `IndentationError: unexpected indent` on every
+      # check. Five consecutive failures, an unhealthy container, and a bot that
+      # was in fact beating perfectly. The quoting was the defect, not the bot.
+      #
+      # One command with no nesting cannot be reshaped that way. The window is
+      # two minutes against a fifteen-second beat, so eight consecutive misses
+      # are tolerated: far more than a dropped packet, far less than an outage.
+      test:
+        - CMD-SHELL
+        - find /tmp/argus-heartbeat -mmin -2 -print -quit | grep -q .
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 60s
     stop_grace_period: 30s
     restart: unless-stopped
 
@@ -65,12 +86,27 @@ services:
       # access, and set ADMIN_COOKIE_SECURE=true behind it.
       - "127.0.0.1:8080:8080"
     healthcheck:
+      # Tests the database, not merely the process.
+      #
+      # `/api/health` returns 200 in both states and puts the difference in the
+      # body -- `status` is "ok" or "degraded" -- so a check on the status code
+      # alone reported this container healthy with its database connection gone,
+      # while serving nothing useful and while the tunnel's health depended on
+      # this reporting healthy.
+      #
+      # JSON is parsed rather than matched as text: a substring test would pass
+      # on a `degraded` body whose error message happened to contain the word.
+      #
+      # One line, not a folded scalar. Folding joins lines with a space, so a
+      # newline inside the quoted program becomes a space inside the string --
+      # which is how the bot's check came to fail every probe with
+      # `IndentationError: unexpected indent` while the bot beat perfectly.
       test:
         - CMD-SHELL
         - >-
-          python -c "import urllib.request,sys;
-          sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/api/health',
-          timeout=5).status == 200 else 1)"
+          python -c "import json,urllib.request,sys;
+          r=json.load(urllib.request.urlopen('http://127.0.0.1:8080/api/health',timeout=5));
+          sys.exit(0 if r.get('status')=='ok' else 1)"
       interval: 30s
       timeout: 10s
       retries: 3
@@ -88,14 +124,40 @@ services:
   # then set MINIAPP_URL to that value (no trailing slash) in .env and run:
   #   docker compose up -d --force-recreate bot admin
   tunnel:
-    image: cloudflare/cloudflared:2024.10.0
-    # --protocol http2 is deliberate. QUIC (UDP 7844) fails on this network:
-    # the connector registered once at startup and then logged 486 failed
-    # QUIC attempts with 'timeout: no recent network activity', never
-    # falling back on its own. HTTP/2 over TCP registers immediately and
-    # has stayed up across repeated external requests. cloudflared fixes
-    # the protocol at startup, so this cannot be changed without a restart.
-    command: tunnel --no-autoupdate --protocol http2 --url http://admin:8080
+    # Built rather than pulled: the official image is a scratch image with one
+    # static binary and no shell, so a wrapper cannot run in it. An earlier
+    # attempt to point the entrypoint at a script there failed with
+    # `exec: "/bin/sh": no such file or directory`, which took the tunnel down
+    # and with it the only thing serving the Mini App.
+    #
+    # The wrapper publishes the hostname cloudflared was assigned to a shared
+    # volume, and exits non-zero when Cloudflare reports `Tunnel not found` so a
+    # reaped tunnel is replaced rather than retried forever. `MINIAPP_URL`
+    # remains only as the fallback for a deployment with no tunnel.
+    #
+    # `image:` is required, not decorative. Without it compose names the built
+    # image after the Dockerfile's first FROM and tags it
+    # `cloudflare/cloudflared:2024.10.0` -- overwriting the very image the next
+    # build copies the binary out of. The first build still produced a correct
+    # image, and the second would have built a tunnel container with no tunnel
+    # in it.
+    image: argus-tunnel:latest
+    build:
+      context: .
+      dockerfile: docker/tunnel.Dockerfile
+
+    # --protocol http2 is deliberate. QUIC (UDP 7844) fails on this
+    # network: the connector registered once at startup and then logged
+    # 486 failed QUIC attempts with 'timeout: no recent network
+    # activity', never falling back on its own. HTTP/2 over TCP
+    # registers immediately and has stayed up across repeated external
+    # requests. cloudflared fixes the protocol at startup, so this
+    # cannot be changed without a rebuild.
+    environment:
+      TUNNEL_URL_FILE: /tunnel/tunnel-url.conf
+      TUNNEL_STATUS_FILE: /tunnel/tunnel-status.conf
+    volumes:
+      - tunnel_url:/tunnel
     depends_on:
       admin:
         condition: service_healthy
@@ -103,11 +165,20 @@ services:
     # No ports published: the tunnel is outbound-only, which is why it works
     # behind NAT without any firewall change.
     healthcheck:
-      test: ["CMD", "cloudflared", "tunnel", "--help"]
-      interval: 60s
+      # Reads the wrapper's own status, not the binary's help text.
+      #
+      # `cloudflared tunnel --help` exits 0 whenever the file exists, so it
+      # reported this container healthy through an eleven-hour outage in which
+      # every registration was refused and the Mini App could not be reached.
+      test:
+        - CMD-SHELL
+        - >-
+          test -f /tunnel/tunnel-url.conf &&
+          grep -q '^state=registered' /tunnel/tunnel-status.conf
+      interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 45s
 
   # Caddy: TLS termination in front of the admin panel.
   #
@@ -194,6 +265,12 @@ volumes:
   caddy_data:
   # Caddy's runtime configuration, including the admin API bind address.
   caddy_config:
+
+  # The hostname the running tunnel was assigned, and its registration state,
+  # written by the tunnel wrapper and read by the bot. Without this the bot has
+  # to be told the hostname by hand after every restart, which is exactly how it
+  # came to point at a hostname that no longer resolved.
+  tunnel_url:
 
 networks:
   default:
