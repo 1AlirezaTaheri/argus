@@ -151,7 +151,12 @@ function SettingRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          {choices ? (
+          {/* `choices.length`, not `choices`. A kind with no vocabulary parses to
+              [], which is truthy, so a plain test renders a Select with no items:
+              a dark box with a chevron and nothing in it. That is what
+              retention_days, export_max_scans, allowed_cidrs and
+              retention_max_scans_per_target showed before this was fixed. */}
+          {choices.length ? (
             // Design-system Select, not a native <select>: a native one opens
             // the platform's own popup list, which cannot be themed and ignored
             // the panel's focus ring. These are the setting controls, so they

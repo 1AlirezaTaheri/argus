@@ -200,12 +200,26 @@ async def _post_init(app) -> None:
         await miniapp_ui.set_menu_button(app.bot, settings)
         await miniapp_ui.publish_commands(app.bot, settings)
 
+        # Keep the menu button pointing at the live tunnel hostname. A quick
+        # tunnel is reaped every half hour and each reap mints a new name, so
+        # the button Telegram holds would otherwise go stale and open nothing.
+        # The watcher seeds itself from the URL just set above, so this start
+        # is not mistaken for a change.
+        miniapp_watcher = miniapp_ui.MiniAppUrlWatcher(app.bot, settings)
+        app.bot_data["miniapp_watcher"] = miniapp_watcher
+        miniapp_watcher.start()
+
 
 async def _post_shutdown(app) -> None:
     """Stop in dependency order so nothing is left mid-flight."""
     heartbeat: Heartbeat | None = app.bot_data.get("heartbeat")
     if heartbeat is not None:
         await heartbeat.stop()
+    # Stopped with the heartbeat so its lifetime is exactly the application's.
+    # A watcher left running after shutdown is a task that outlives the bot.
+    watcher = app.bot_data.get("miniapp_watcher")
+    if watcher is not None:
+        await watcher.stop()
     scheduler: ScanScheduler | None = app.bot_data.get("scheduler")
     if scheduler is not None:
         await scheduler.stop()

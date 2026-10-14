@@ -218,13 +218,14 @@ export function LoginPage(): JSX.Element {
                     the layering read backwards. The answer input beside it is
                     already a well; the two halves of one control should match. */}
                 <span
-                  className="inset-well flex select-none items-center rounded-md border border-input bg-bg px-3 font-mono text-sm text-fg"
+                  className="inset-well flex shrink-0 select-none items-center whitespace-nowrap rounded-md border border-input bg-bg px-3 font-mono text-sm text-fg"
                   aria-hidden
                 >
                   {challenge.question}
                 </span>
                 <Input
                   id="captcha-answer"
+                  className="min-w-0"
                   inputMode="numeric"
                   autoComplete="off"
                   placeholder="Answer"

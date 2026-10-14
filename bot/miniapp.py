@@ -9,6 +9,7 @@ plain-HTTP URL rather than publishing a button that opens a blank WebView.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import (
@@ -126,3 +127,72 @@ async def publish_commands(bot, settings) -> None:
         del profile_names, start_handlers
     except Exception:
         log.warning("Could not publish the command list", exc_info=True)
+
+
+class MiniAppUrlWatcher:
+    """Re-publish the chat menu button whenever the tunnel hostname changes.
+
+    A quick tunnel's hostname changes every time Cloudflare reaps it. The bot
+    reads the published file rather than the stale setting, so the URL it would
+    send is always current -- but the menu button is a value Telegram holds, not
+    a value the bot re-reads, and it was set exactly once at startup. After the
+    first reap the button opens a name that no longer resolves, and nothing
+    says so, because the bot did send a valid button.
+
+    Watching the resolved URL and re-sending on change is what makes the button
+    survive a reap without restarting the bot. The check is one file read, so
+    the cost of running it every half second would be nothing; it is spaced to
+    match how fast a reap can plausibly matter to someone with the app open.
+    """
+
+    def __init__(self, bot, settings, *, interval: float = 30.0) -> None:
+        self._bot = bot
+        self._settings = settings
+        self._interval = interval
+        self._task: asyncio.Task[None] | None = None
+        self._last_url: str | None = None
+
+    def start(self) -> None:
+        if self._task is not None:
+            return
+        self._task = asyncio.create_task(self._run(), name="argus-miniapp-watcher")
+
+    async def stop(self) -> None:
+        task, self._task = self._task, None
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    async def _run(self) -> None:
+        # Seed with the current URL so the initial state is not read as a
+        # change. Without this the first tick would see "None -> https://..."
+        # and re-publish a button that was just published in _post_init.
+        self._last_url = resolved_url(self._settings)
+        while True:
+            await asyncio.sleep(self._interval)
+            try:
+                await self._check()
+            except Exception:
+                # A watcher that raises would take the event loop down with it.
+                # The menu button is a convenience; it must never be the reason
+                # the bot stops answering.
+                log.warning("miniapp url watcher: check failed", exc_info=True)
+
+    async def _check(self) -> None:
+        current = resolved_url(self._settings)
+        if current == self._last_url:
+            return
+        log.info(
+            "miniapp url watcher: tunnel hostname changed %s -> %s; "
+            "re-publishing the menu button",
+            self._last_url,
+            current,
+        )
+        self._last_url = current
+        # Reuses the startup path rather than calling set_chat_menu_button
+        # directly, so the two can never disagree about what a button is.
+        await set_menu_button(self._bot, self._settings)
