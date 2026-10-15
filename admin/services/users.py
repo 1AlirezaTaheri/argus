@@ -228,20 +228,28 @@ def delete_telegram_user(session: Session, telegram_user_id: int) -> bool:
 
 
 def sync_from_allowed(
-    database, telegram_user_ids: tuple[int, ...], default_role: str = "operator"
+    database,
+    telegram_user_ids: tuple[int, ...],
+    default_role: str = "operator",
+    admin_user_id: int | None = None,
 ) -> int:
     """Ensure every ID in the allow-list has a row. Returns rows created.
 
     Runs at bot startup so the panel shows configured users even before
     anyone has run ``/start``. Takes the ``Database`` rather than a session
     because the caller owns no ambient transaction here.
+
+    ``admin_user_id`` is seeded as "admin" rather than ``default_role``. The
+    panel is admin-only and every user was previously an operator, so without
+    this there was no Telegram admin and the panel was reachable by nobody.
+    Only rows that do not exist are created, so a role changed later is never
+    overwritten by a subsequent start.
     """
     created = 0
     for telegram_user_id in telegram_user_ids:
         with database.session() as session:
             if get_telegram_user(session, telegram_user_id) is None:
-                upsert_telegram_user(
-                    session, telegram_user_id, role=default_role
-                )
+                role = "admin" if telegram_user_id == admin_user_id else default_role
+                upsert_telegram_user(session, telegram_user_id, role=role)
                 created += 1
     return created

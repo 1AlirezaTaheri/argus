@@ -12,7 +12,7 @@ import logging
 
 import httpx
 import telegram.error
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes
 from telegram.request import HTTPXRequest
 
 from admin.services import audit as audit_service
@@ -21,6 +21,7 @@ from bot.handlers import export as export_handlers
 from bot.handlers import ops as ops_handlers
 from bot.handlers import scan as scan_handlers
 from bot.handlers import schedule as schedule_handlers
+from bot.handlers import panel as panel_handlers
 from bot.handlers import start as start_handlers
 from bot.handlers import status as status_handlers
 from bot.handlers import target as target_handlers
@@ -294,7 +295,14 @@ def build_application(settings: Settings):
     try:
         from admin.services import users as user_service
 
-        user_service.sync_from_allowed(database, settings.allowed_user_ids)
+        # The lowest allow-listed ID is the operator who configured the bot, and
+        # is seeded as the Telegram admin. Only rows that do not exist are
+        # created, so this never overwrites a role changed from the panel.
+        _allowed = settings.allowed_user_ids
+        _admin_id = min(_allowed) if _allowed else None
+        user_service.sync_from_allowed(
+            database, _allowed, admin_user_id=_admin_id
+        )
     except Exception:
         log.warning("Could not sync allowed users", exc_info=True)
 
@@ -384,6 +392,7 @@ def build_application(settings: Settings):
     app.bot_data["scheduler"] = scheduler
     app.bot_data["bot_language"] = bot_language
 
+    app.add_handler(CommandHandler("panel", panel_handlers.panel))
     app.add_handler(CommandHandler("start", start_handlers.start))
     app.add_handler(CommandHandler("app", start_handlers.open_app))
     app.add_handler(CommandHandler("help", start_handlers.help_command))
@@ -400,6 +409,11 @@ def build_application(settings: Settings):
     app.add_handler(CommandHandler("export", export_handlers.export))
     app.add_handler(CommandHandler("report", export_handlers.report))
     app.add_handler(CommandHandler("schedule", schedule_handlers.schedule))
+
+    # The panel's button router. Matches only `p:`-prefixed callback data, so it
+    # never intercepts another handler's callbacks; it is registered before the
+    # error handler so a panel crash is reported rather than silently dropped.
+    app.add_handler(CallbackQueryHandler(panel_handlers.panel_callback))
 
     # Must be registered last: it is the fallback for every other handler.
     app.add_error_handler(on_unhandled_error)

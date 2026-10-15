@@ -114,6 +114,11 @@ async def publish_commands(bot, settings) -> None:
         ]
         if is_configured(settings):
             commands.append(BotCommand("app", "Open the dashboard"))
+        # Admin-only, but published rather than hidden: this bot has a single
+        # operator, and a button that silently does nothing is a worse experience
+        # than one that answers "for admins only". /help is left alone -- it is
+        # the regular user's reference.
+        commands.append(BotCommand("panel", "Admin panel"))
         commands.extend(
             [
                 BotCommand("scan", "Scan a target"),
