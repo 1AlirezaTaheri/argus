@@ -44,9 +44,11 @@ from telegram.ext import ContextTypes
 from bot.handlers.common import (
     audit,
     authenticate_or_denounce,
+    authenticator,
     database,
     lang_of_update,
 )
+from security.authentication import Principal
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +64,26 @@ PAGE = 5  # rows per page; a phone screen shows about eight lines of text
 # ---------------------------------------------------------------------------
 
 
+async def _row_of(context: ContextTypes.DEFAULT_TYPE, user_id: int):
+    """The caller's ``TelegramUser`` row, or ``None``.
+
+    Returned as the model rather than a dict on purpose, so there is one shape
+    for this value and the access pattern is visible at the call site: ``row.role``,
+    never ``row["role"]``. ``list_telegram_users`` hands back dicts and
+    ``get_telegram_user`` hands back a model, and the panel once mixed them.
+    """
+    try:
+        from admin.services.users import get_telegram_user
+
+        with database(context).session() as session:
+            return get_telegram_user(session, user_id)
+    except Exception:
+        # A lookup that fails must not silently grant access. Returning nothing
+        # denies, which is the safe direction.
+        log.warning("Could not resolve the user row for %s", user_id, exc_info=True)
+        return None
+
+
 async def _role_of(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> str | None:
     """The caller's Telegram role, or ``None`` when they have no row.
 
@@ -70,19 +92,8 @@ async def _role_of(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> str | No
     A user with no row is not a viewer either: the allow-list is the gate, and
     this only refines what an allowed user may do.
     """
-    try:
-        from admin.services.users import get_telegram_user
-
-        with database(context).session() as session:
-            row = get_telegram_user(session, user_id)
-        if row is None:
-            return None
-        return row.role
-    except Exception:
-        # A role lookup that fails must not silently grant or deny. Treating it
-        # as "no role" denies, which is the safe direction.
-        log.warning("Could not resolve role for %s", user_id, exc_info=True)
-        return None
+    row = await _row_of(context, user_id)
+    return None if row is None else row.role
 
 
 async def _require_admin(
@@ -506,6 +517,67 @@ async def _screen_rules(context: ContextTypes.DEFAULT_TYPE, lang: str, page: int
     return "\n".join(lines), InlineKeyboardMarkup(keyboard_rows)
 
 
+async def _confirm_delete_rule(
+    context: ContextTypes.DEFAULT_TYPE, lang: str, rule_id: int
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Ask before deleting a rule. This is what the first press shows.
+
+    Two taps, not one. Deleting a rule cannot be undone from the panel -- the
+    match pattern, type and priority are gone, and there is no "restore" --
+    while the button sits on the same row as the enable toggle, one tap away.
+    So the first press only asks.
+
+    Before this existed the button routed to a bare ``_screen_rules``, so
+    tapping Delete re-rendered the list and did nothing: a destructive control
+    that looks live and is not.
+    """
+    from core.i18n import t
+    from database.repository import RuleRepository
+
+    with _db(context).session() as session:
+        rule = RuleRepository(session).get_rule(rule_id)
+
+    if rule is None:
+        # Deleted between the two taps, or a stale button.
+        return t("panel.rules.missing", lang), InlineKeyboardMarkup(
+            [[InlineKeyboardButton(t("panel.back", lang), callback_data=f"{PREFIX}:r")]]
+        )
+
+    lines = [t("panel.rules.delete_confirm", lang), "", f"• {rule.name}"]
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                t("panel.rules.delete_yes", lang),
+                callback_data=f"{PREFIX}:r:{rule_id}:dx",
+            ),
+            InlineKeyboardButton(
+                t("panel.rules.delete_no", lang), callback_data=f"{PREFIX}:r"
+            ),
+        ],
+    ])
+    return "\n".join(lines), keyboard
+
+
+async def _delete_rule(
+    context: ContextTypes.DEFAULT_TYPE, lang: str, rule_id: int, principal
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Delete a rule, then re-render the list.
+
+    ``delete_rule`` returns False when there was nothing to delete, so a double
+    press on Yes is recorded as a failure rather than silently succeeding.
+    """
+    from database.repository import RuleRepository
+
+    with _db(context).session() as session:
+        deleted = RuleRepository(session).delete_rule(rule_id)
+
+    audit(context, "panel.rule.delete",
+           actor_id=principal.user_id, actor_username=principal.username,
+           success=deleted, details={"rule_id": rule_id})
+
+    return await _screen_rules(context, lang)
+
+
 async def _screen_settings(context: ContextTypes.DEFAULT_TYPE, lang: str) -> tuple[str, InlineKeyboardMarkup]:
     """Settings with their current values.
 
@@ -682,17 +754,28 @@ async def _toggle_rule(context: ContextTypes.DEFAULT_TYPE, lang: str, rule_id: i
 
     The new state is read back from the row rather than assumed, so the screen
     shows what the database holds and not what the toggle was asked to do.
+
+    The flip is `not row.enabled` on the row as read. It is not "set it to True,
+    and fall back to False if that did not work" -- which is what this did
+    before, and which forced every rule on: the first branch always succeeded
+    for a rule that exists, so the fallback was dead code and no rule could ever
+    be switched off. ``set_enabled`` also raises for a missing rule, so the row
+    is read first rather than relying on the exception.
     """
-    from core.i18n import t
     from database.repository import RuleRepository
 
+    flipped = False
     with _db(context).session() as session:
-        rule = RuleRepository(session).set_enabled(rule_id, True)
-        if rule is None:
-            rule = RuleRepository(session).set_enabled(rule_id, False)
-        audit(context, "panel.rule.toggle",
-               actor_id=principal.user_id, actor_username=principal.username,
-               success=rule is not None)
+        repo = RuleRepository(session)
+        row = repo.get_rule(rule_id)
+        if row is not None:
+            repo.set_enabled(rule_id, not row.enabled)
+            flipped = True
+
+    audit(context, "panel.rule.toggle",
+           actor_id=principal.user_id, actor_username=principal.username,
+           success=flipped,
+           details={"rule_id": rule_id})
 
     return await _screen_rules(context, lang)
 
@@ -701,16 +784,29 @@ async def _toggle_user(context: ContextTypes.DEFAULT_TYPE, lang: str, user_id: i
     """Flip a user's enabled flag.
 
     Read back rather than assumed, for the same reason as the rule toggle.
+
+    ``get_telegram_user`` returns a model, so the current state is read as
+    ``row.enabled``. Subscripting it (``row["enabled"]``) raises, and inside the
+    router that raise became the generic error screen with no action taken.
+
+    A missing row is not updated at all: ``update_telegram_user`` raises
+    ``UserError`` for an unknown id, so a stale button left over from a deleted
+    user would have thrown. The row is checked first and the screen simply
+    re-renders.
     """
     from admin.services.users import get_telegram_user, update_telegram_user
 
+    flipped = False
     with _db(context).session() as session:
         row = get_telegram_user(session, user_id)
-        new_state = not (row["enabled"] if row else True)
-        update_telegram_user(session, user_id, enabled=new_state)
-        audit(context, "panel.user.toggle",
-               actor_id=principal.user_id, actor_username=principal.username,
-               success=True)
+        if row is not None:
+            update_telegram_user(session, user_id, enabled=not row.enabled)
+            flipped = True
+
+    audit(context, "panel.user.toggle",
+           actor_id=principal.user_id, actor_username=principal.username,
+           success=flipped,
+           details={"telegram_user_id": user_id})
 
     return await _screen_users(context, lang)
 
@@ -721,20 +817,33 @@ async def _cycle_role(context: ContextTypes.DEFAULT_TYPE, lang: str, user_id: in
     A cycle rather than a picker, because there are three roles and the common
     case is one step up or down. It cannot be used to escalate past admin
     (admin is the last step), and it audits the change either way.
+
+    ``get_telegram_user`` returns a model, so the current role is read as
+    ``row.role``; subscripting it raised, and the router turned that into the
+    generic error screen with no role changed.
     """
     from core.i18n import t
-    from admin.services.users import get_telegram_user, update_telegram_user, TELEGRAM_ROLES
+    from admin.services.users import (
+        TELEGRAM_ROLES,
+        get_telegram_user,
+        update_telegram_user,
+    )
 
+    changed = False
     with _db(context).session() as session:
         row = get_telegram_user(session, user_id)
         if row is not None:
-            current = row["role"] if row["role"] in TELEGRAM_ROLES else "viewer"
+            current = row.role if row.role in TELEGRAM_ROLES else "viewer"
             idx = TELEGRAM_ROLES.index(current)
-            nxt = TELEGRAM_ROLES[(idx + 1) % len(TELEGRAM_ROLES)]
-            update_telegram_user(session, user_id, role=nxt)
-            audit(context, "panel.user.role",
-                   actor_id=principal.user_id, actor_username=principal.username,
-                   success=True)
+            update_telegram_user(
+                session, user_id, role=TELEGRAM_ROLES[(idx + 1) % len(TELEGRAM_ROLES)]
+            )
+            changed = True
+
+    if changed:
+        audit(context, "panel.user.role",
+               actor_id=principal.user_id, actor_username=principal.username,
+               success=True)
 
     return await _screen_users(context, lang)
 
@@ -810,7 +919,7 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     action = parts[1] if len(parts) > 1 else ""
     param = parts[2] if len(parts) > 2 else None
 
-    principal = await _require_admin_from_callback(update, context)
+    principal = await _admin_principal(update, context)
     if principal is None:
         return
 
@@ -853,6 +962,10 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 rule_id, sub = param.split(":", 1)
                 if sub == "t":
                     text, keyboard = await _toggle_rule(context, lang, int(rule_id), principal)
+                elif sub == "d":
+                    text, keyboard = await _confirm_delete_rule(context, lang, int(rule_id))
+                elif sub == "dx":
+                    text, keyboard = await _delete_rule(context, lang, int(rule_id), principal)
                 else:
                     text, keyboard = await _screen_rules(context, lang)
             else:
@@ -895,27 +1008,45 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.edit_message_text(text, reply_markup=keyboard)
 
 
-async def _require_admin_from_callback(
+async def _admin_principal(
     update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> object | None:
-    """Authorise a button press.
+) -> Principal | None:
+    """The caller as a ``Principal``, but only if they are an admin.
 
-    The message on a callback is the one the button is attached to, which the
-    original sender may no longer be able to answer. Authorisation is re-checked
-    here rather than trusted from the ``/panel`` that opened it, because a role
-    could have been changed in between.
+    Returns a ``Principal`` rather than the ``TelegramUser`` row. That is the
+    contract ``authenticate_or_denounce`` already gives every other privileged
+    handler, and downstream code reads ``principal.user_id`` and
+    ``principal.username``. Handing the ORM model onward instead made those reads
+    fail -- the model's field is ``telegram_user_id`` -- and the ``AttributeError``
+    was swallowed by the router's broad ``except``, so the user saw the generic
+    error screen and the action silently never happened.
+
+    Two gates, in order:
+
+    * the allow-list, via ``Authenticator``. Checked first because a row in
+      ``telegram_users`` outlives removal from ``ALLOWED_USER_IDS``: the row is
+      created on first contact and never removed, so the row alone would keep
+      granting access to someone who had been taken off the list.
+    * the row's ``enabled`` flag and ``admin`` role, re-read on every press
+      rather than trusted from the ``/panel`` that opened the menu, because a
+      role or an enabled flag could have changed in between.
+
+    Silent on refusal, because a callback query has no ``update.message`` to
+    reply to and the router already answered the query. The command path is the
+    one that explains a denial.
     """
     user = update.effective_user
     if user is None:
         return None
 
-    try:
-        from admin.services.users import get_telegram_user
-
-        with database(context).session() as session:
-            row = get_telegram_user(session, user.id)
-        if row is None or not row.enabled:
-            return None
-        return row if row.role == "admin" else None
-    except Exception:
+    principal = authenticator(context).authenticate(user.id, user.username)
+    if principal is None:
         return None
+
+    row = await _row_of(context, user.id)
+    if row is None or not row.enabled or row.role != "admin":
+        return None
+
+    # The role from the row, not the Authenticator's default of "operator",
+    # so the audit trail records what the user actually is.
+    return Principal(user_id=user.id, username=user.username, role=row.role)
