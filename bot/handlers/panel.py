@@ -868,14 +868,28 @@ async def _change_setting(context: ContextTypes.DEFAULT_TYPE, lang: str, key: st
     if store is None:
         return await _screen_settings(context, lang)
 
+    changed = False
     try:
         with _db(context).session() as session:
             store.set(session, key, value, actor=principal.username)
-            audit(context, "panel.setting.change",
-                   actor_id=principal.user_id, actor_username=principal.username,
-                   success=True, details={"key": key, "value": value})
+            changed = True
     except SettingError as exc:
         log.warning("Panel setting change rejected for %s: %s", key, exc)
+
+    # Outside the session, deliberately. `audit` reaches `record_standalone`,
+    # which opens its *own* session and writes; calling it while this one still
+    # holds an open write transaction is a nested write. On SQLite that is an
+    # outright "database is locked", and because `record_standalone` swallows
+    # every exception the audit row is then lost silently -- the settings screen
+    # renders as if the change had been recorded. Every other action in this
+    # module audits after its session closes; this one did not.
+    #
+    # Auditing the rejection is the point of `success=`: the log is meant to make
+    # a refused change as visible as an accepted one, and a SettingError used to
+    # produce no row at all.
+    audit(context, "panel.setting.change",
+           actor_id=principal.user_id, actor_username=principal.username,
+           success=changed, details={"key": key, "value": value})
 
     return await _screen_settings(context, lang)
 
