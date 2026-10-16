@@ -235,3 +235,41 @@ for when the first failure was recorded and only judges samples after it.
   two were caught.
 
 ---
+---
+
+## 08:10 — Final state, and one last finding
+
+**Gate:** 1399 tests passed; `bash tools/verify-all.sh` **15/15**; five containers
+healthy; `git status` clean; `45e55fd` pushed and the remote sha matches.
+
+**The watchdog is live on the running tunnel**, and did something worth seeing:
+```
+04:50:42 tunnel: probe 000000 from https://cook-chargers-optical-cedar.trycloudflare.com/api/health (1/3)
+```
+A real probe failure on the live deployment, counted once, and **no restart** --
+which is the intended behaviour: a single blip is not a dead tunnel, and the
+threshold exists so the watchdog does not turn a hiccup into an outage. It had
+already been started three times over the session (03:21, 03:24, 03:33), each time
+logging `watching /api/health every 90s; restarting after 3 failures`.
+
+**A cosmetic defect, found by reading that log line.** The code reads
+
+    probe 000000 from ... (1/3)
+
+It should read `000`. `curl -w '%{http_code}'` already prints `000` when the
+request never completed, and the shell fallback `|| printf '000'` appends a second
+one. The comparison is unaffected -- `000` matches neither `2*` nor `3*` and so
+still counts as a failure -- so this changes nothing about behaviour, only about
+what an operator reading the log sees. Worth a one-line fix:
+`code=$(curl ... || true)` and let curl's own output stand.
+
+**A false alarm of mine, for the record.** I checked the watchdog was alive with
+`ps -eo pid,args --no-headers | grep -c sleep` and got 0, which looked like a dead
+watchdog. busybox `ps` does not accept `--no-headers`; the command errored and I
+counted the error text. The watchdog was running throughout. Fourth harness
+misreading in this session, and the same family as the rest: a check that reported
+a conclusion it had not actually established.
+
+**Left undone, deliberately:** the `/lang` alias for `/tlang`, a language selector
+inside the Mini App, and the directional-to-logical CSS conversion for RTL. All
+three are noted above with the reasoning.
