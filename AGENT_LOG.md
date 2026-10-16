@@ -273,3 +273,74 @@ a conclusion it had not actually established.
 **Left undone, deliberately:** the `/lang` alias for `/tlang`, a language selector
 inside the Mini App, and the directional-to-logical CSS conversion for RTL. All
 three are noted above with the reasoning.
+---
+
+## 08:40 — I broke the operator's Telegram account, and fixed the cause
+
+The operator reported the bot answering `⛔ حساب شما غیرفعال شده است` ("your account
+has been disabled"). That was me.
+
+**Cause.** `tools/page_sweep.js` clicks every interactive element on every page, and
+on the Telegram Users page the enable/disable switch is one of them. It is a real
+PATCH against the production database. The audit trail has the whole story:
+
+```
+00:10:14  operator  telegram_user.updated  7575983824  {"enabled": false}
+00:10:32  operator  telegram_user.updated  880000111   {"enabled": false}
+00:10:56  operator  telegram_user.updated  8539266061  {"enabled": false}
+```
+
+and earlier rounds at 23:33, 23:37, 23:41 (off), then 23:59, 00:00 (back on) --
+three sweeps, each toggling all three users. Roles were never touched; only
+`enabled` was written, and only that needed restoring.
+
+**Restored**, reading the target state from the audit trail rather than assuming
+it: `UPDATE 3`, `still_disabled = 0`, roles intact. Then confirmed through the
+bot's own code rather than through SQL -- `Authenticator.authenticate` for the
+allow-list and `authenticate_or_denounce`'s row check for the flag, run inside the
+bot container against its own `DATABASE_URL`:
+
+```
+user 7575983824 -- allow-listed True, row True, enabled True, will let them in: True
+RESULT: every allow-listed user now passes the bot's gate
+```
+
+Worth noting: the panel's audit trail is the only reason this was diagnosable at
+all. It named the action, the target and the new value for every one of the nine
+writes.
+
+**The fix.** A sweep that clicks destructive controls against production is not a
+test; it is a way to break the deployment and find out afterwards. `page_sweep.js`
+is now read-only by default:
+
+* a deny-list of roles and verbs classifies state-changing controls and they are
+  **never clicked** -- 23 were skipped in the verification run, including every
+  "Purge", "Remove" and the enable switches;
+* `--allow-mutating` re-enables them, opt-in only, because the safe default is the
+  one worth keeping;
+* a second guard watches the network and reports any click that issues a
+  non-GET, so the classifier is checked rather than trusted. It immediately caught
+  `POST /api/rules/test` ("Ask the engine") and the `POST /api/logout` from
+  Sign out, both of which the classifier had called safe;
+* the run exits non-zero if anything wrote.
+
+**Verified, not asserted.** Re-running the repaired sweep over the same nine
+pages:
+
+```
+controls clicked 229   navigate 59  dialog 60  network 16  theme 10  dom 13  mutating 10  error 0
+not clicked because they change stored state: 23
+users now:  880000111 t | 7575983824 t | 8539266061 t
+writes to users in the last 15 minutes:  0      (was 9)
+```
+
+**A false skip, noted rather than hidden.** The verb list includes `add`, so
+"Add target" is now skipped -- but that control only opens a form and mutates
+nothing. Erring toward skipping is the right direction for a tool pointed at
+production, and the network guard would have caught it had it been clicked, so it
+is left as-is with the reason recorded.
+
+**The lesson, and it is not subtle.** I built a tool that clicked every button on
+every page of a live system, ran it three times, and treated "0 errors" as the
+result. It never once asked what "no error" meant for a button whose job is to
+change a flag.

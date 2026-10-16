@@ -1,69 +1,49 @@
 /**
  * Visit every page in the nav, then click every interactive element on each.
  *
- * ## Why this exists
+ * ## Read-only by default, and that is the whole point of this file's design
  *
- * The gate has `verify-buttons.sh`, which covers three chrome controls: the
- * command palette, the theme toggle and the account menu. There is no check that
- * a button rendered on the targets page, the rules page or the style guide
- * actually does something. "The page loads" and "every control works" are
- * different claims and only the first is covered.
+ * The first version of this sweep clicked *everything*, and on the Telegram Users
+ * page that includes the enable/disable switch. Each run flipped all three users
+ * off in the production database:
  *
- * ## The false positives this is written to avoid
+ *   23:33:17 / 23:37:33 / 23:41:49   -> enabled false   (run 1)
+ *   23:59:28 / 23:59:45 / 00:00:02   -> enabled true    (run 2, back on)
+ *   00:10:14 / 00:10:32 / 00:10:56   -> enabled false   (run 3, left off)
  *
- * `verify-buttons.sh` documents the mistakes it made:
+ * The operator's Telegram bot answered "your account has been disabled". The
+ * damage was only diagnosable because every one of those writes went through the
+ * panel's audit trail, which named the action, the target and the new value --
+ * worth noting, because it is the same trail the audit tests were added to
+ * protect.
  *
- *   1. It clicked "Sign out", destroyed its own session, and every later page
- *      was the login form -- so the login form's buttons were reported as
- *      failures.
- *      This first made the SAME mistake. Session-ending controls were deferred
- *      to the end of each page, but the Dashboard is the *first* page, so
- *      signing out there meant pages 2-9 were all measured on the login form
- *      and not one of them was really tested -- 9 pages, 45 clicks, all of them
- *      measuring the same login form. Session-ending controls are now a separate
- *      pass that runs after every other page has been swept, and the session is
- *      asserted before each page so a lost session is loud rather than silent.
- *   2. It read a trigger from a stale element handle, the click threw "not
- *      clickable", and a working button was recorded as dead. Here every click
- *      starts from a fresh page load and re-queries by index, so a handle can
- *      never be stale.
- *   3. It judged the theme toggle by page text, but a theme change is an
- *      attribute on <html> and barely touches the text. Here nothing is judged
- *      by text; an outcome is observed state change.
+ * A sweep that clicks destructive controls against production is not a test, it
+ * is a way of breaking the deployment and finding out afterwards. So:
  *
- * ## ERR_ABORTED is not an error
+ *   * controls that change server state are **never clicked**. They are listed
+ *     as `skipped-mutating` with the reason, so they are still accounted for and
+ *     a human can decide to exercise them deliberately;
+ *   * the classifier is a deny-list of roles and verbs, not a list of the ones
+ *     that happened to be clicked -- a new "Deactivate" button must be caught by
+ *     the verb, not remembered;
+ *   * a second guard watches the network. If a click is classified as safe but
+ *     issues anything other than a GET, the row is reported as `mutating` and
+ *     says so loudly. The classifier is not trusted to be complete; it is
+ *     checked.
  *
- * The first run reported the Dashboard's Refresh button as broken:
- * `request failed: /api/stats?days=7 net::ERR_ABORTED`. An aborted request is
- * what a cancelled fetch looks like -- React unmounting, or a navigation racing
- * an in-flight refetch. Counting that as a failure reports a working button as
- * dead, the same class of mistake as the three above. It gets its own outcome so
- * it can be judged rather than assumed either way.
+ * `--allow-mutating` re-enables the clicks, and is opt-in because the safe
+ * default is the one worth keeping.
  *
- * ## What counts as "did something"
+ * ## The other false positive this avoids
  *
- * Clicking is not the claim -- *something changed* is.
+ * `verify-buttons.sh` documented three mistakes, and this made the first of them
+ * again on its first run: clicking "Sign out" destroyed the session, so pages 2-9
+ * were all the login form and the run looked healthy. Session-ending controls are
+ * now a separate final pass, and the session is asserted before every page.
  *
- *   navigate  the URL changed
- *   dialog    a role=dialog became visible, or aria-expanded flipped false->true
- *   network   the page issued an XHR/fetch, which is what a save or delete does
- *   theme     data-theme on <html> changed
- *   dom       the page's text content changed
- *   aborted   a request was cancelled (see above) -- neither proof nor failure
- *   noop      nothing observable changed
- *   error     the click threw, or logged a console error, or a request failed
- *             for a reason that is not cancellation
- *
- * `noop` is reported, not failed: some controls are legitimately inert in a given
- * state (a "next page" button on the last page). The point is to produce the list
- * for a human to judge, and to be honest that a click was a no-op rather than
- * dressing it up.
- *
- * ## Output
- *
- * A JSON file (SWEEP_JSON_PATH, default /shots/sweep.json) and a human summary on
- * stdout. The first run printed the JSON inline and buried the summary under
- * ~40k characters; it now goes to a file.
+ * Clicks also start from a fresh page load and re-query by index, so no element
+ * handle is ever stale, and nothing is judged by page text -- a theme change is
+ * an attribute on <html> and barely touches the text.
  */
 const puppeteer = require('puppeteer');
 const fs = require('fs');
@@ -73,8 +53,30 @@ const OUT = process.env.SHOT_DIR || '/shots';
 const ONLY = process.env.SWEEP_PAGES || '';
 const JSON_PATH = process.env.SWEEP_JSON_PATH || `${OUT}/sweep.json`;
 
-// Pages reachable from the nav, plus two that are reachable but not linked from
-// the sidebar. A page nobody links to is still a page a URL can reach.
+/**
+ * Set only by an operator who has decided the risk is worth taking. It exists so
+ * that exercising a destructive control is a choice someone makes on purpose,
+ * not the default behaviour of a tool that was pointed at production.
+ */
+const ALLOW_MUTATING = process.env.SWEEP_ALLOW_MUTATING === '1';
+
+// A control whose purpose is to change stored state. Matched on verbs rather
+// than on specific labels so a control this list has never seen is still caught.
+const MUTATING_VERBS = /\b(remove|delete|purge|erase|destroy|drop|trash|revoke|reset|clear|disable|deactivate|deprovision|suspend|terminate|wipe)\b/i;
+const MUTATING_ROLES = new Set(['switch', 'checkbox']);
+// Verbs that mean "this changes something", so they are the ones a sweep must not
+// press by surprise.
+const MUTATING_LABELS = /\b(toggle|enable|disable|activate|deactivate|save|submit|apply|commit|publish|rotate|regenerate|start|stop|restart|scan|import|upload|revoke|ban|mute|unban|add|remove|create|update|edit|rename)\b/i;
+
+function mutatingReason(el) {
+  const text = `${el.text || ''} ${el.ariaLabel || ''} ${el.title || ''} ${el.name || ''}`;
+  if (MUTATING_ROLES.has(el.role)) return `role=${el.role} is a state toggle`;
+  if (MUTATING_VERBS.test(text)) return 'the label names a destructive verb';
+  if (MUTATING_LABELS.test(text)) return 'the label names a state-changing verb';
+  if (el.type === 'submit') return 'it is a submit button';
+  return null;
+}
+
 const EXTRA_PAGES = [
   ['telegram-users', '/admin/telegram-users'],
   ['audit', '/admin/audit'],
@@ -94,13 +96,6 @@ const SEL = [
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Human label for a descriptor.
- *
- * Takes the plain object describe() returns, not a DOM element: the descriptor
- * has to survive a page reload to be re-found, and the first version called
- * getAttribute() on it and threw on the very first element.
- */
 function label(el) {
   const parts = [];
   const push = (s) => { if (s && !parts.includes(s)) parts.push(s); };
@@ -117,8 +112,7 @@ function label(el) {
 
 /** True for anything that would end the session; swept last, and only once. */
 function endsSession(el) {
-  const t = `${el.text} ${el.ariaLabel} ${el.title}`.toLowerCase();
-  return /sign out|log ?out|exit/.test(t);
+  return /sign out|log ?out|exit/i.test(`${el.text} ${el.ariaLabel} ${el.title}`);
 }
 
 async function login(page) {
@@ -137,7 +131,12 @@ async function login(page) {
   return false;
 }
 
-/** Is the session still good? Asserted before every page. */
+/**
+ * Is the session still good? Asserted before every page.
+ *
+ * Without this a lost session is silent, and every click below measures the login
+ * form -- which is what the first run did, and it looked green.
+ */
 async function sessionOk(page) {
   const s = await page.evaluate(async () => {
     try {
@@ -172,8 +171,8 @@ async function describe(page) {
       const r = el.getBoundingClientRect();
       const style = getComputedStyle(el);
       const disabled = el.disabled === true || el.getAttribute('aria-disabled') === 'true';
-      // No box means not clickable and not worth clicking: a hidden control
-      // that "does nothing" is not a dead button.
+      // No box means not clickable and not worth clicking: a hidden control that
+      // "does nothing" is not a dead button.
       const visible = r.width > 0 && r.height > 0 &&
         style.visibility !== 'hidden' && style.display !== 'none';
       return {
@@ -211,22 +210,41 @@ async function snapshot(page) {
   });
 }
 
-/**
- * Click one element on a freshly loaded page and record what changed.
- * `deferSessionEnders` is false for the final pass that tests sign-out itself.
- */
+/** Escape out of a modal or menu so the next click lands on the page. */
+async function dismissOverlays(page) {
+  try {
+    await page.keyboard.press('Escape');
+    await sleep(150);
+    const open = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"]'))
+        .filter((d) => d.getBoundingClientRect().width > 0).length);
+    if (open) {
+      await page.mouse.click(4, 4);
+      await sleep(150);
+    }
+  } catch (e) {
+    /* mid-navigation; the next click reloads anyway */
+  }
+}
+
+/** Close anything a click left open, or it intercepts every later click. */
 async function clickAndObserve(page, href, el, attach) {
   const row = { page: el.__page, href, index: el.i, ...el, outcome: null, detail: '' };
   const consoleErrors = [];
   const failedRequests = [];
   const aborted = [];
   const requests = [];
+  const writes = [];
 
   const onConsole = (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)); };
   const onRequest = (r) => {
-    if (['xhr', 'fetch'].includes(r.resourceType())) {
-      requests.push(`${r.method()} ${r.url().replace(BASE, '')}`);
-    }
+    if (!['xhr', 'fetch'].includes(r.resourceType())) return;
+    const verb = r.method().toUpperCase();
+    const where = r.url().replace(BASE, '');
+    requests.push(`${verb} ${where}`);
+    // The guard that does not trust the classifier: anything that is not a GET
+    // or a HEAD changed stored state.
+    if (!['GET', 'HEAD'].includes(verb)) writes.push(`${verb} ${where}`);
   };
   const onFailed = (r) => {
     const f = r.failure();
@@ -253,7 +271,12 @@ async function clickAndObserve(page, href, el, attach) {
       await sleep(1000);
       const now = await snapshot(page);
 
-      if (consoleErrors.length) {
+      if (writes.length) {
+        // Reported first, and loudly: whatever else happened, this changed
+        // stored state and the operator needs to know.
+        row.outcome = 'mutating';
+        row.detail = `CHANGED SERVER STATE: ${writes.slice(0, 2).join(', ')}`;
+      } else if (consoleErrors.length) {
         row.outcome = 'error';
         row.detail = `console: ${consoleErrors[0]}`;
       } else if (failedRequests.length) {
@@ -290,31 +313,8 @@ async function clickAndObserve(page, href, el, attach) {
     row.detail = (err && err.message ? err.message : String(err)).slice(0, 160);
   }
 
-  // Close anything the click left open. A confirm dialog that stays up
-  // intercepts every later click, so without this the first modal button on a
-  // page turned every control after it into a timeout -- which reads as "the
-  // page is broken" when the page is fine and the harness forgot to dismiss.
   await dismissOverlays(page);
-
   return row;
-}
-
-/** Escape out of a modal or a menu, so the next click lands on the page. */
-async function dismissOverlays(page) {
-  try {
-    await page.keyboard.press('Escape');
-    await sleep(150);
-    // Some menus close on a click-away rather than Escape.
-    const open = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"]'))
-        .filter((d) => d.getBoundingClientRect().width > 0).length);
-    if (open) {
-      await page.mouse.click(4, 4);
-      await sleep(150);
-    }
-  } catch (e) {
-    /* the page may be mid-navigation; the next click reloads anyway */
-  }
 }
 
 (async () => {
@@ -327,12 +327,9 @@ async function dismissOverlays(page) {
   });
   const ctx = await browser.createBrowserContext();
   const page = await ctx.newPage();
-
-  // A native confirm/alert would block the run indefinitely. Dismiss it and say
-  // so, rather than hanging until the protocol timeout.
   page.on('dialog', async (d) => {
-    console.log(`   (native dialog: ${d.type()} "${String(d.message()).slice(0, 60)}" -- dismissed)`);
-    try { await d.dismiss(); } catch (e) { /* already handled */ }
+    console.log(`   (native dialog: ${d.type()} -- dismissed)`);
+    try { await d.dismiss(); } catch (e) { /* handled */ }
   });
 
   let onConsole = null; let onRequest = null; let onFailed = null;
@@ -347,10 +344,9 @@ async function dismissOverlays(page) {
     onConsole = onRequest = onFailed = null;
   };
 
-  if (!(await login(page))) {
-    console.error('SWEEP_FATAL: could not log in');
-    process.exit(2);
-  }
+  if (!(await login(page))) { console.error('SWEEP_FATAL: could not log in'); process.exit(2); }
+
+  console.log(`ALLOW_MUTATING=${ALLOW_MUTATING ? 'yes -- this run WILL change server state' : 'no -- destructive controls are listed, not clicked'}`);
 
   const nav = await discoverNav(page);
   const pages = [...nav.map((n) => [n.text || n.href, n.href]), ...EXTRA_PAGES];
@@ -360,21 +356,15 @@ async function dismissOverlays(page) {
     : pages;
 
   console.log(`discovered ${pages.length} pages from the nav; sweeping ${targets.length}`);
-  targets.forEach(([n, h]) => console.log(`  ${n}  ->  ${h}`));
 
   const results = [];
   const sessionEnders = [];
+  const skippedMutating = [];
 
   for (const [name, href] of targets) {
-    // A lost session must be loud. If this ever fires, every click below would
-    // be measuring the login form and the run would look green while testing
-    // nothing -- which is exactly what the first run did.
     if (!(await sessionOk(page))) {
       console.log(`\n!! session lost before ${name}; re-authenticating`);
-      if (!(await login(page))) {
-        console.error('SWEEP_FATAL: session lost and re-login failed');
-        process.exit(2);
-      }
+      if (!(await login(page))) { console.error('SWEEP_FATAL: cannot re-authenticate'); process.exit(2); }
     }
 
     await page.goto(`${BASE}${href}`, { waitUntil: 'domcontentloaded' });
@@ -384,27 +374,37 @@ async function dismissOverlays(page) {
     const before = await snapshot(page);
     const elements = await describe(page);
     const usable = elements.filter((e) => e.visible && !e.disabled);
-    const deferred = usable.filter((e) => endsSession(e));
     const rows = [];
 
-    console.log(`\n[${name}] ${href}`);
-    console.log(`  ${elements.length} elements, ${usable.length} clickable, ` +
-      `${deferred.length} session-ending (deferred)`);
+    const safe = [];
+    for (const el of usable) {
+      if (endsSession(el)) { sessionEnders.push({ page: name, href, el }); continue; }
+      const why = ALLOW_MUTATING ? null : mutatingReason(el);
+      if (why) {
+        skippedMutating.push({ page: name, index: el.i, label: label(el), reason: why });
+        continue;
+      }
+      safe.push(el);
+    }
 
-    for (const el of usable.filter((e) => !endsSession(e))) {
+    console.log(`\n[${name}] ${href}`);
+    console.log(`  ${elements.length} elements, ${usable.length} clickable, `
+      + `${safe.length} clicked, ${skippedMutating.filter((s) => s.page === name).length} skipped as mutating, `
+      + `${usable.length - safe.length - sessionEnders.filter((s) => s.page === name).length} session-ending`);
+
+    for (const el of safe) {
       el.__page = name;
       const row = await clickAndObserve(page, href, el, attach);
       detach();
       rows.push(row);
-      const mark = { navigate: '->', dialog: '+', network: '~', theme: 'T', dom: 'd', aborted: 'x', noop: '.', error: 'X' };
+      const mark = { navigate: '->', dialog: '+', network: '~', theme: 'T', dom: 'd',
+        aborted: 'x', noop: '.', error: 'X', mutating: '!!' };
       console.log(`   ${mark[row.outcome]} [${row.index}] ${label(row)}  -- ${row.detail}`);
     }
 
-    for (const el of deferred) sessionEnders.push({ page: name, href, el });
     results.push({ page: name, href, before, elements, rows });
   }
 
-  // Last pass: the session-ending controls, once, after everything else.
   if (sessionEnders.length) {
     console.log(`\n=== session-ending controls (${sessionEnders.length}), tested last ===`);
     for (const { page: name, href, el } of sessionEnders) {
@@ -413,7 +413,6 @@ async function dismissOverlays(page) {
       detach();
       results.push({ page: name, href, before: {}, elements: [el], rows: [row] });
       console.log(`   ${row.outcome} [${row.index}] ${label(row)}  -- ${row.detail}`);
-      // Put the session back for anything that follows.
       if (!(await sessionOk(page))) await login(page);
     }
   }
@@ -422,11 +421,22 @@ async function dismissOverlays(page) {
 
   const all = results.flatMap((r) => r.rows);
   const by = (o) => all.filter((r) => r.outcome === o);
-  const ORDER = ['navigate', 'dialog', 'network', 'theme', 'dom', 'aborted', 'noop', 'error'];
+  const ORDER = ['navigate', 'dialog', 'network', 'theme', 'dom', 'aborted', 'noop', 'mutating', 'error'];
+
   console.log('\n================ SUMMARY ================');
   console.log(`pages swept        ${results.length}`);
   console.log(`controls clicked   ${all.length}`);
   for (const o of ORDER) console.log(`  ${o.padEnd(10)} ${by(o).length}`);
+
+  console.log(`\nnot clicked because they change stored state: ${skippedMutating.length}`);
+  skippedMutating.forEach((s) => console.log(`  ${s.page} [${s.index}] ${s.label}  -- ${s.reason}`));
+
+  const wrote = by('mutating');
+  if (wrote.length) {
+    console.log('\n!!! CONTROLS THAT CHANGED SERVER STATE DESPITE BEING CLASSIFIED SAFE !!!');
+    wrote.forEach((r) => console.log(`  ${r.page} [${r.index}] ${label(r)}  -- ${r.detail}`));
+    console.log('  The classifier missed these. Treat them as destructive and add them to it.');
+  }
 
   for (const o of ['noop', 'aborted', 'error']) {
     if (!by(o).length) continue;
@@ -434,8 +444,11 @@ async function dismissOverlays(page) {
     by(o).forEach((r) => console.log(`  ${r.page} [${r.index}] ${label(r)}  -- ${r.detail}`));
   }
 
-  fs.writeFileSync(JSON_PATH, JSON.stringify(results));
+  fs.writeFileSync(JSON_PATH, JSON.stringify({ results, skippedMutating }));
   console.log(`\njson: ${JSON_PATH}`);
+  // Non-zero if anything wrote, so this cannot be run against production without
+  // someone noticing that it now reports what it did.
+  process.exit(wrote.length ? 1 : 0);
 })().catch((e) => {
   console.error('sweep failed:', e && e.message ? e.message : e);
   process.exit(1);
