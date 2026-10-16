@@ -1,29 +1,26 @@
 import { create } from 'zustand'
+import { DEFAULT_LANG, dirOf, type Lang } from '@/lib/i18n'
 
 export type Theme = 'dark' | 'light'
 
 interface UIState {
   theme: Theme
+  language: Lang
   sidebarCollapsed: boolean
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  setLanguage: (language: Lang) => void
   toggleSidebar: () => void
 }
 
 const STORAGE_KEY = 'argus-theme'
+const LANG_KEY = 'argus-lang'
+
 /**
- * The key this app used before the rename. Still read, because a
- * browser cannot know a preference stored under the old name belongs
- * to the new one -- and silently resetting everyone's chosen theme to
- * their OS default would be invisible.
- */
-/**
- * The key this app used before the rename.
- *
- * Still read, because a browser cannot know that a preference stored under the
- * old name belongs to the new one. Renaming the key outright would silently
- * reset every existing user's chosen theme to their OS default, and it would be
- * invisible: the page still renders, just in the wrong theme.
+ * The key this app used before the rename to rgus-theme. Still read, because a
+ * browser cannot know that a preference stored under the old name belongs to the
+ * new one -- silently resetting everyone's chosen theme to their OS default would
+ * be invisible: the page still renders, just in the wrong theme.
  *
  * Removed once the value has been written forward, so the fallback does not
  * outlive the migration and start overriding a later deliberate choice.
@@ -82,11 +79,65 @@ function initialTheme(): Theme {
   return 'dark'
 }
 
+/**
+ * Resolve the initial panel language.
+ *
+ * Order: an explicit stored choice, then the browser's own preference, then
+ * English.
+ *
+ * The browser preference is read from `navigator.language`, not from a
+ * `--lang` custom property, because the two disagree often enough that guessing
+ * between them is worse than taking the first and letting the selector correct
+ * it. A wrong initial language is one click to fix; an unreadable one is not.
+ */
+function initialLanguage(): Lang {
+  if (typeof window === 'undefined') return DEFAULT_LANG
+
+  try {
+    const stored = window.localStorage.getItem(LANG_KEY)
+    if (stored === 'en' || stored === 'fa') return stored
+  } catch {
+    // Private-mode browsers can throw on localStorage access.
+  }
+
+  try {
+    const nav = window.navigator.language || ''
+    // Persian is served under several tags; anything fa-* is Persian.
+    if (/^fa\b|-fa\b|^fa-/i.test(nav)) return 'fa'
+  } catch {
+    // navigator.language is not present in every webview.
+  }
+
+  return DEFAULT_LANG
+}
+
+/**
+ * Apply the language to the document.
+ *
+ * `lang` matters for font selection and for anything assistive technology uses
+ * to pick a pronunciation; `dir` matters because Persian is right-to-left and
+ * a Persian sentence laid out left-to-right is misread, not merely ugly.
+ *
+ * The attribute is set on the document rather than on a subtree so that any
+ * portalled content and the browser's own direction handling agree.
+ */
+function applyLanguage(language: Lang): void {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  root.setAttribute('lang', language)
+  root.setAttribute('dir', dirOf(language))
+}
+
+/**
+ * Apply the theme to the document.
+ *
+ * On first mount the transition class is skipped: the page has just painted, so
+ * animating it would look like a flash rather than a deliberate switch.
+ */
 function applyTheme(theme: Theme, animate = true): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   if (animate) {
-    // Only animate a deliberate switch, never the initial mount.
     root.classList.add('theme-transition')
     window.setTimeout(() => root.classList.remove('theme-transition'), 200)
   }
@@ -112,6 +163,7 @@ function persist(key: string, value: string): void {
 
 export const useUIStore = create<UIState>((set, get) => ({
   theme: initialTheme(),
+  language: initialLanguage(),
 
   sidebarCollapsed: readSidebar(),
 
@@ -125,6 +177,12 @@ export const useUIStore = create<UIState>((set, get) => ({
     get().setTheme(get().theme === 'dark' ? 'light' : 'dark')
   },
 
+  setLanguage: (language) => {
+    applyLanguage(language)
+    persist(LANG_KEY, language)
+    set({ language })
+  },
+
   toggleSidebar: () => {
     const next = !get().sidebarCollapsed
     persist(SIDEBAR_KEY, String(next))
@@ -132,5 +190,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 }))
 
-// Apply the stored theme on first module evaluation.
+// Apply on first module evaluation, so the very first paint is already in the
+// right language and direction rather than flipping after hydration.
 applyTheme(useUIStore.getState().theme, false)
+applyLanguage(useUIStore.getState().language)

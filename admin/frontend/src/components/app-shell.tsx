@@ -21,6 +21,9 @@ import {
   Users as UsersIcon,
 } from 'lucide-react'
 import { useUIStore } from '@/store/ui'
+import { useI18n } from '@/lib/use-i18n'
+import type { MessageKey } from '@/lib/i18n'
+import { LanguageMenu } from './language-menu'
 import { avatarColor, cn, initials } from '@/lib/utils'
 import { Badge, Button, Tooltip, TooltipContent, TooltipTrigger } from './ui'
 import { CommandPalette, useCommandPalette } from './command-palette'
@@ -28,7 +31,9 @@ import { MobileNav } from './mobile-nav'
 
 interface NavItem {
   to: string
-  label: string
+  /** A message key, not the label itself: the same nav is used
+   *  in two languages, so the word cannot be baked in here. */
+  label: MessageKey
   icon: React.ComponentType<{ className?: string }>
   /** Nested routes keep the parent highlighted. */
   end?: boolean
@@ -37,17 +42,17 @@ interface NavItem {
 // Navigation targets are relative to the router's basename ("/admin"), so a
 // link here must be written as "/" or "/users", never "/admin/users".
 const NAV: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/telegram-users', label: 'Telegram Users', icon: UsersIcon },
-  { to: '/targets', label: 'Targets', icon: Network },
-  { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/telegram-users', label: 'nav.telegramUsers', icon: UsersIcon },
+  { to: '/targets', label: 'nav.targets', icon: Network },
+  { to: '/audit', label: 'nav.audit', icon: ScrollText },
   // Between the audit log and settings, because that is where an operator
   // looks when asking "why was that scan refused" or "what can I scan".
-  { to: '/rules', label: 'Rules', icon: ShieldIcon },
-  { to: '/settings', label: 'Settings', icon: SettingsIcon },
+  { to: '/rules', label: 'nav.rules', icon: ShieldIcon },
+  { to: '/settings', label: 'nav.settings', icon: SettingsIcon },
   // Imports every Phase 1 component so they are built and shipped rather
   // than tree-shaken away as unused exports.
-  { to: '/style-guide', label: 'Style Guide', icon: Paintbrush },
+  { to: '/style-guide', label: 'nav.styleGuide', icon: Paintbrush },
 ]
 
 /**
@@ -62,21 +67,25 @@ const NAV: NavItem[] = [
  * A first segment that is not a known page is rendered as-is rather than
  * dropped, so a detail route like /targets/12 still produces a useful trail.
  */
-function breadcrumbs(pathname: string): Array<{ label: string; to: string | null }> {
+function breadcrumbs(
+  pathname: string,
+  tr: (key: MessageKey) => string,
+): Array<{ label: string; to: string | null }> {
   const segments = pathname.split('/').filter(Boolean)
 
   // "/" has no segments; it is the dashboard.
   if (segments.length === 0) {
-    return [{ label: 'Dashboard', to: null }]
+    return [{ label: tr('nav.dashboard'), to: null }]
   }
 
   const first = segments[0]
-  if (first === undefined) return [{ label: 'Dashboard', to: null }]
+  if (first === undefined) return [{ label: tr('nav.dashboard'), to: null }]
 
-  const known = NAV.find((item) =>
-    item.to === `/${first}`,
-  )
-  const headLabel = known?.label ?? first
+  const known = NAV.find((item) => item.to === `/${first}`)
+  // NAV holds message keys rather than labels, so the head is resolved here.
+  // An unknown segment has no key and is shown as the raw path segment it is:
+  // dropping it would lose the only clue the user has.
+  const headLabel = known ? tr(known.label) : first
   const crumbs: Array<{ label: string; to: string | null }> = [
     { label: headLabel, to: segments.length > 1 ? known?.to ?? null : null },
   ]
@@ -142,6 +151,7 @@ export function Sidebar({
   role: string
   onLogout: () => void
 }): JSX.Element {
+  const tr = useI18n()
   const collapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
 
@@ -164,14 +174,14 @@ export function Sidebar({
           </div>
           {!collapsed ? (
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-fg">Argus</p>
-              <p className="truncate text-[11px] text-muted">admin panel</p>
+              <p className="truncate text-sm font-semibold text-fg">{tr('app.name')}</p>
+              <p className="truncate text-[11px] text-muted">{tr('app.subtitle')}</p>
             </div>
           ) : null}
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 p-2" aria-label="Main">
+      <nav className="flex-1 space-y-1 p-2" aria-label={tr('nav.dashboard')}>
         {NAV.map((item) => {
           const link = (
             <NavLink
@@ -204,14 +214,14 @@ export function Sidebar({
                     aria-hidden
                   />
                   <item.icon className="h-4 w-4 shrink-0" aria-hidden />
-                  {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                  {!collapsed ? <span className="truncate">{tr(item.label)}</span> : null}
                 </>
               )}
             </NavLink>
           )
 
           return collapsed ? (
-            <CollapsedHint key={item.to} label={item.label}>
+            <CollapsedHint key={item.to} label={tr(item.label)}>
               {link}
             </CollapsedHint>
           ) : (
@@ -237,7 +247,7 @@ export function Sidebar({
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            aria-label="Sign out"
+            aria-label={tr('chrome.signOut')}
             onClick={onLogout}
           >
             <LogOut className="h-4 w-4" aria-hidden />
@@ -255,7 +265,7 @@ export function Sidebar({
           ) : (
             <ChevronLeft className="h-4 w-4" aria-hidden />
           )}
-          {!collapsed ? <span>Collapse</span> : null}
+          {!collapsed ? <span>{tr('chrome.collapseSidebar')}</span> : null}
         </Button>
       </div>
     </aside>
@@ -277,9 +287,10 @@ export function Topbar({
   onOpenPalette: () => void
   onOpenNav: () => void
 }): JSX.Element {
+  const tr = useI18n()
   const location = useLocation()
   const navigate = useNavigate()
-  const crumbs = breadcrumbs(location.pathname)
+  const crumbs = breadcrumbs(location.pathname, tr)
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border bg-bg/85 px-4 backdrop-blur">
@@ -287,7 +298,7 @@ export function Topbar({
       <button
         type="button"
         onClick={onOpenNav}
-        aria-label="Open navigation"
+        aria-label={tr('chrome.openNavigation')}
         aria-haspopup="dialog"
         className={cn(
           '-ml-1 rounded-md p-2 text-muted transition-colors hover:bg-elevated hover:text-fg',
@@ -345,7 +356,7 @@ export function Topbar({
           )}
         >
           <Search className="h-3.5 w-3.5" aria-hidden />
-          <span>Search</span>
+          <span>{tr('chrome.search')}</span>
           <kbd className="rounded border border-border px-1 font-mono text-[10px]">
             Ctrl K
           </kbd>
@@ -353,14 +364,16 @@ export function Topbar({
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" onClick={onRefresh} aria-label="Refresh data">
+            <Button variant="ghost" size="icon" onClick={onRefresh} aria-label={tr('chrome.refresh')}>
               <RefreshCw className="h-4 w-4" aria-hidden />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Refresh data</TooltipContent>
+          <TooltipContent>{tr('chrome.refresh')}</TooltipContent>
         </Tooltip>
 
         <ThemeToggle />
+
+        <LanguageMenu />
 
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
@@ -436,7 +449,7 @@ export function Topbar({
                 className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-danger outline-none data-[highlighted]:bg-danger-soft"
               >
                 <LogOut className="h-4 w-4" aria-hidden />
-                Sign out
+                {tr('chrome.signOut')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

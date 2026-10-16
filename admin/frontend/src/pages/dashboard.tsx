@@ -37,6 +37,7 @@ import {
 } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 import { api, type ScheduleStatus, type WorkerStatus } from '@/lib/api'
+import { useI18n } from '@/lib/use-i18n'
 import { cn, formatNumber } from '@/lib/utils'
 import {
   Badge,
@@ -128,6 +129,7 @@ function Freshness({ at }: { at: number | null }): JSX.Element | null {
 }
 
 export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Element {
+  const tr = useI18n()
   const queryClient = useQueryClient()
 
   const stats = useQuery({
@@ -221,13 +223,13 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
         <Link to="/targets">
           <Button size="sm" variant="outline">
             <PlusCircle className="h-4 w-4" aria-hidden />
-            Add target
+            {tr('action.addTarget')}
           </Button>
         </Link>
         <Link to="/audit">
           <Button size="sm" variant="ghost">
             <ScrollText className="h-4 w-4" aria-hidden />
-            View audit
+            {tr('action.viewAudit')}
           </Button>
         </Link>
 
@@ -250,14 +252,14 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
           <KPICard
-            label="Targets"
+            label={tr('kpi.targets')}
             value={data?.targets ?? 0}
             icon={Network}
             trendLabel="registered"
             hint="Every target in the registry, enabled or not."
           />
           <KPICard
-            label="Scans today"
+            label={tr('kpi.scansToday')}
             value={today?.scans ?? 0}
             icon={ScanLine}
             trend={trend('scans')}
@@ -265,17 +267,17 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
             hint="Scans that started today, from the same series the chart plots."
           />
           <KPICard
-            label="Changes today"
+            label={tr('kpi.changesToday')}
             value={today?.changes ?? 0}
             icon={AlertTriangle}
             trend={trend('changes')}
             trendLabel="vs yesterday"
-            hint="Difference events recorded today across all targets and profiles."
+            hint={tr('kpi.changesToday.hint')}
             tone={today && today.changes > 0 ? 'warning' : 'neutral'}
           />
           <WorkerTile worker={worker.data} loading={worker.isLoading} />
           <KPICard
-            label="Failed (24h)"
+            label={tr('kpi.failed24h')}
             value={data?.scans_24h_failed ?? 0}
             icon={XCircle}
             trendLabel="scans"
@@ -299,7 +301,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
             ) : series.length === 0 ? (
               <EmptyState
                 icon={ScanLine}
-                title="No activity yet"
+                title={tr('empty.noActivity')}
                 description="Run a scan from Telegram with /scan and it will appear here."
               />
             ) : (
@@ -386,7 +388,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
             ) : breakdown.length === 0 ? (
               <EmptyState
                 icon={Layers}
-                title="No change events"
+                title={tr('empty.noChanges')}
                 description="Changes appear once a second scan finds a difference."
               />
             ) : (
@@ -439,9 +441,9 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Recent activity</CardTitle>
+            <CardTitle>{tr('panel.recentActivity')}</CardTitle>
             <Link to="/audit" className="link text-xs">
-              View all
+              {tr('panel.viewAll')}
             </Link>
           </CardHeader>
           <CardContent className="pt-0">
@@ -454,7 +456,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
             ) : (data?.recent_audit ?? []).length === 0 ? (
               <EmptyState
                 icon={ScrollText}
-                title="Nothing logged yet"
+                title={tr('empty.nothingLogged')}
                 description="Sign-ins, target changes and setting updates are recorded here."
               />
             ) : (
@@ -512,16 +514,16 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-muted">
                   <Database className="h-4 w-4" aria-hidden />
-                  Database
+                  {tr('sys.database')}
                 </span>
                 {health.data ? (
-                  <StatusDot ok={dbOk} label={dbOk ? 'reachable' : 'down'} />
+                  <StatusDot ok={dbOk} label={tr(dbOk ? 'sys.reachable' : 'sys.down')} />
                 ) : (
                   <Skeleton className="h-4 w-16" />
                 )}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted">Hosts recorded</span>
+                <span className="text-muted">{tr('sys.hostsRecorded')}</span>
                 <span className="tabular-nums text-fg">{formatNumber(data?.hosts ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between">
@@ -529,7 +531,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
                 <span className="tabular-nums text-fg">{formatNumber(data?.services ?? 0)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted">Last scan</span>
+                <span className="text-muted">{tr('sys.lastScan')}</span>
                 <span className="text-xs text-fg">
                   {data?.last_scan_at
                     ? formatDistanceToNow(new Date(data.last_scan_at), { addSuffix: true })
@@ -537,7 +539,7 @@ export function DashboardPage({ onRefresh }: { onRefresh: () => void }): JSX.Ele
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted">Telegram users</span>
+                <span className="text-muted">{tr('sys.telegramUsers')}</span>
                 <span className="tabular-nums text-fg">
                   {formatNumber(data?.telegram_users ?? 0)}
                 </span>
@@ -681,10 +683,11 @@ function TopTargetsPanel({
   error: boolean
   onRetry: () => void
 }): JSX.Element {
+  const tr = useI18n()
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Most-changed targets</CardTitle>
+        <CardTitle>{tr('panel.mostChanged')}</CardTitle>
         <span className="text-xs text-muted">last {days}d</span>
       </CardHeader>
       <CardContent className="pt-0">

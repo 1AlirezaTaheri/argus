@@ -247,24 +247,33 @@ export function TargetsPage(): JSX.Element {
           Add target
         </Button>
         <div className="ml-auto flex rounded-md border border-border p-0.5">
-          <button
-            className={cn(
-              'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors',
-              view === 'grid' ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg',
-            )}
-            onClick={() => setView('grid')}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> Grid
-          </button>
-          <button
-            className={cn(
-              'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors',
-              view === 'table' ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg',
-            )}
-            onClick={() => setView('table')}
-          >
-            <Rows3 className="h-3.5 w-3.5" /> Table
-          </button>
+          {/* aria-pressed, because the active view was signalled by the
+              bg-primary class and nothing else: to a screen reader the two
+              buttons were identical, and the only difference was a colour. The
+              group is labelled so the pair is announced as one control rather
+              than two unlabelled buttons. */}
+          <div role="group" aria-label="Target list layout">
+            <button
+              className={cn(
+                'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors',
+                view === 'grid' ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg',
+              )}
+              aria-pressed={view === 'grid'}
+              onClick={() => setView('grid')}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Grid
+            </button>
+            <button
+              className={cn(
+                'flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors',
+                view === 'table' ? 'bg-primary text-primary-fg' : 'text-muted hover:text-fg',
+              )}
+              aria-pressed={view === 'table'}
+              onClick={() => setView('table')}
+            >
+              <Rows3 className="h-3.5 w-3.5" /> Table
+            </button>
+          </div>
         </div>
       </div>
 

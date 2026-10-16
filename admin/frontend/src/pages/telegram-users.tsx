@@ -61,17 +61,71 @@ function Avatar({ user }: { user: TelegramUser }): JSX.Element {
   )
 }
 
+/**
+ * Put `text` on the clipboard, falling back when the async API refuses.
+ *
+ * `navigator.clipboard` is unavailable or rejects in three ordinary situations:
+ * a non-secure context, a document that does not have focus, and a permission
+ * the user has denied. The original handler discarded the rejection with `void`,
+ * so all three ended with the user having clicked a copy button, no copy, and no
+ * message -- because there was no error left to show. Verified in this panel:
+ * the clipboard stayed empty and the component's own `copied` flag never flipped.
+ *
+ * Returns true only when the text actually reached the clipboard, so the caller
+ * can tell the user when it did not rather than assuming it did.
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Fall through to the legacy path rather than reporting failure yet.
+  }
+
+  // execCommand is deprecated and is only here because it is the one thing that
+  // works where the async API is refused. The scratch textarea has to be in the
+  // document for select() to take, and has to go away again either way.
+  const scratch = document.createElement('textarea')
+  scratch.value = text
+  scratch.setAttribute('readonly', '')
+  scratch.style.position = 'fixed'
+  scratch.style.top = '0'
+  scratch.style.opacity = '0'
+  document.body.appendChild(scratch)
+  try {
+    scratch.select()
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(scratch)
+  }
+}
+
 function CopyableId({ id }: { id: number }): JSX.Element {
   const [copied, setCopied] = React.useState(false)
+
+  // The timeout lives in an effect so it is cleared if the row unmounts while
+  // the "copied" tick is still running.
+  React.useEffect(() => {
+    if (!copied) return
+    const timer = window.setTimeout(() => setCopied(false), 1200)
+    return () => window.clearTimeout(timer)
+  }, [copied])
+
   return (
     <button
       className="group inline-flex items-center gap-1.5 font-mono text-xs text-muted transition-colors hover:text-fg"
-      onClick={() => {
-        void navigator.clipboard.writeText(String(id)).then(() => {
-          setCopied(true)
-          window.setTimeout(() => setCopied(false), 1200)
-        })
+      onClick={async () => {
+        if (!(await copyToClipboard(String(id)))) {
+          // Say so. A copy button that fails quietly is worse than no button,
+          // because the user believes it worked.
+          toast.error(`Could not copy ${id}`)
+          return
+        }
+        setCopied(true)
       }}
+      aria-label="Copy Telegram ID"
       title="Copy Telegram ID"
     >
       {id}

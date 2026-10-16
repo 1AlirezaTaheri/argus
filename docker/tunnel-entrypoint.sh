@@ -1,6 +1,7 @@
 #!/bin/sh
-# Run the quick tunnel, publish the hostname it was assigned, and give up
-# cleanly when Cloudflare has reaped the tunnel.
+# Run the quick tunnel, publish the hostname it was assigned, restart when the
+# published URL stops answering, and give up cleanly when Cloudflare has reaped
+# the tunnel.
 #
 # ## Why this wrapper exists
 #
@@ -10,7 +11,7 @@
 # `/app` in Telegram opens nothing and nothing raises anywhere -- the bot sent a
 # perfectly valid button to a host that is gone.
 #
-# That has happened on this deployment four times. The first was repaired by
+# That has happened on this deployment many times. The first was repaired by
 # editing .env. The second left a resolver that preferred a file nobody wrote.
 # The third went unnoticed for eleven hours because the health check ran
 # `cloudflared tunnel --help`, which exits 0 whenever the binary exists. Each
@@ -35,54 +36,57 @@
 #   degraded   Cloudflare is refusing registration, but has not named the
 #              reason. Usually the start of a reap; sometimes a Cloudflare-side
 #              outage. Worth waiting through, worth watching.
+#   stale      the tunnel reports itself connected, but the URL it published
+#              does not answer. This is the state the watchdog below exists to
+#              produce, and it is the one the previous version could not reach.
 #   reaped     `Tunnel not found`. This tunnel name will never come back, so
 #              the wrapper exits and Docker starts a new one.
 #   exited     cloudflared itself has stopped. The wrapper exits, and Docker's
 #              restart policy starts a new one.
 #   no-binary  the image is missing cloudflared. Nothing can follow from here.
 #
-# The distinction between `degraded` and `registered` is the part that took the
-# longest to get right. The first version wrote `state=registered` when it saw
-# the banner and never reconsidered -- so a tunnel that was subsequently refused
-# registration kept reporting healthy forever, which is the same defect as the
-# `tunnel --help` probe it replaced, one layer further in. A health check that
-# records the past rather than the present is a decoration.
+# ## Why the watchdog exists, and why it probes rather than watches the log
 #
-# Deliberately absent: a `stale` state for a tunnel that has gone quiet without
-# an error. Detecting it needs the read loop to wake on a timer, which needs the
-# non-POSIX `read -t` in a script that must run under busybox ash -- and a false
-# unhealthy on a working tunnel is worse than a missed one, because nothing
-# restarts on unhealthy here and the alert would be noise. Every failure that
-# does have a signal is handled: a reaped tunnel names itself, a refused
-# registration names itself, and a cloudflared that has died closes the pipe and
-# ends the loop, which is caught below and restarted.
+# The previous version deliberately had no way to notice a tunnel that had gone
+# quiet, and said so in a comment: detecting it needed a timer the read loop
+# could not provide under busybox ash. That reasoning was half right, and the
+# half that was wrong cost the Mini App several hours at a time.
 #
-# ## Why a FIFO rather than a pipe
+# A quiet tunnel is not detectable from cloudflared's output. A healthy quick
+# tunnel logs one registration and then says nothing: observed here, a tunnel
+# registered at 13:19:56 and logged nothing further until it *lost* the edge at
+# 14:58:47. So a "time since last log line" watchdog would fire on a perfectly
+# working tunnel. Any interval short enough to catch a real outage is an
+# outage factory.
 #
-# The first version ran `cloudflared "$@" 2>&1 &` and read its loop from the
-# script's own stdin. cloudflared's output went to the script's stdout -- which
-# is why the container log looked perfectly normal -- while the loop read
-# nothing and never wrote the file. The tunnel was up and registered; the health
-# check correctly said `state=starting` and `unhealthy`, which is how the bug
-# was caught.
+# What is detectable is the thing a user would notice: the published URL stops
+# answering. That is a property of the whole path -- hostname, edge, connector,
+# origin -- and it is exactly the failure the Mini App user hits. So the
+# watchdog makes the same request a browser would, from outside, and restarts
+# the tunnel when that request fails repeatedly.
 #
-# A pipeline cannot be used directly because `${PIPESTATUS}` is a bashism and
-# this is `/bin/sh`.
-#
-# ## Why it exits rather than retrying forever
-#
-# When Cloudflare has reaped a quick tunnel it answers every registration with
-#
-#     ERR Register tunnel error ... Unauthorized: Tunnel not found
-#
-# and that name never comes back. cloudflared retries forever, which is how the
-# container sat "healthy" for hours serving an error. Retrying a reaped tunnel
-# is pointless, so this exits non-zero and lets Docker start a fresh one, which
-# gets a new name, which gets published.
+# Why a quiet reconnect is not enough: when Cloudflare discards a quick tunnel,
+# cloudflared's connector often reconnects happily, because it is still talking
+# to the edge. The *name* is gone. Logs from that event show
+# `Lost connection with the edge`, a retry, and a fresh `Registered tunnel
+# connection` sixteen seconds later -- a container that looks entirely healthy
+# and answers 530 at its own hostname. No amount of watching cloudflared would
+# have noticed, because from cloudflared's side nothing was wrong.
 set -eu
 
 URL_FILE="${TUNNEL_URL_FILE:-/tunnel/tunnel-url.conf}"
 STATUS_FILE="${TUNNEL_STATUS_FILE:-/tunnel/tunnel-status.conf}"
+
+# --- watchdog configuration ------------------------------------------------
+# Every value is an environment variable with a default, so a deployment can
+# loosen or disable the probe without editing this file. Defaults are chosen so a
+# healthy tunnel is never restarted: three consecutive failures, roughly four and
+# a half minutes apart.
+PROBE_ENABLED="${TUNNEL_PROBE_ENABLED:-1}"
+PROBE_PATH="${TUNNEL_PROBE_PATH:-/api/health}"
+PROBE_INTERVAL="${TUNNEL_PROBE_INTERVAL:-90}"
+PROBE_TIMEOUT="${TUNNEL_PROBE_TIMEOUT:-20}"
+PROBE_FAILURES="${TUNNEL_PROBE_FAILURES:-3}"
 
 mkdir -p "$(dirname "$URL_FILE")" "$(dirname "$STATUS_FILE")"
 
@@ -129,8 +133,89 @@ TUNNEL_PID=$!
 exec 3<"$FIFO"
 
 forward() { kill -TERM "$TUNNEL_PID" 2>/dev/null || true; }
-trap 'forward; wait "$TUNNEL_PID" 2>/dev/null || true; rm -f "$FIFO"; exit 0' \
+
+WATCHDOG_PID=""
+stop_watchdog() {
+    [ -n "$WATCHDOG_PID" ] || return 0
+    kill -TERM "$WATCHDOG_PID" 2>/dev/null || true
+    WATCHDOG_PID=""
+}
+trap 'stop_watchdog; forward; wait "$TUNNEL_PID" 2>/dev/null || true; rm -f "$FIFO"; exit 0' \
     TERM INT
+
+# ---------------------------------------------------------------------------
+# The end-to-end watchdog
+# ---------------------------------------------------------------------------
+#
+# Runs as a subshell so it cannot disturb the read loop below. It sleeps first:
+# before a hostname is published there is nothing to probe, and starting
+# immediately would only produce noise about a missing file.
+#
+# The probe goes to the *published* hostname, from outside, through the edge --
+# not to localhost. Localhost would be up while the tunnel is dead, which is
+# precisely the blind spot this closes.
+start_watchdog() {
+    [ "$PROBE_ENABLED" = "1" ] || {
+        log "the end-to-end probe is disabled (TUNNEL_PROBE_ENABLED=$PROBE_ENABLED)"
+        return 0
+    }
+    command -v curl >/dev/null 2>&1 || {
+        log "no curl in this image; the end-to-end probe cannot run"
+        return 0
+    }
+
+    (
+        fails=0
+        while :; do
+            sleep "$PROBE_INTERVAL"
+            url=$(cat "$URL_FILE" 2>/dev/null || true)
+            case "$url" in
+                http://*|https://*) ;;
+                *) continue ;;
+            esac
+
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+                --max-time "$PROBE_TIMEOUT" "${url}${PROBE_PATH}" 2>/dev/null || printf '000')
+
+            case "$code" in
+                2*|3*)
+                    if [ "$fails" -ne 0 ]; then
+                        log "the published URL answers again ($code); resetting the failure count"
+                        # Back to registered, and only then: a tunnel that was
+                        # failing and now answers is healthy again, and saying so
+                        # is the whole point of recording state here.
+                        [ -n "$HOST" ] && set_state registered
+                    fi
+                    fails=0
+                    ;;
+                *)
+                    fails=$((fails + 1))
+                    log "probe $code from ${url}${PROBE_PATH} (${fails}/${PROBE_FAILURES})"
+                    # The state is dropped on the FIRST failure, not when the
+                    # threshold is reached. The first version wrote `stale` only
+                    # at the moment it decided to restart, so for the whole
+                    # window between the first failed probe and the restart the
+                    # file still said `registered` -- and the health check, which
+                    # greps for exactly that word, reported a tunnel whose URL
+                    # was returning 404 as healthy. Marking it on the first
+                    # failure is what makes the failure window visible.
+                    if [ "$fails" -eq 1 ]; then
+                        set_state degraded
+                        log "the published URL is not answering; reporting degraded until it does or the restart fires"
+                    fi
+                    if [ "$fails" -ge "$PROBE_FAILURES" ]; then
+                        log "the published URL has not answered ${PROBE_FAILURES} times; restarting for a fresh hostname"
+                        write_status "state=stale url=$url age=-"
+                        kill -TERM "$TUNNEL_PID" 2>/dev/null || true
+                        exit 0
+                    fi
+                    ;;
+            esac
+        done
+    ) &
+    WATCHDOG_PID=$!
+    log "watching ${PROBE_PATH} every ${PROBE_INTERVAL}s; restarting after ${PROBE_FAILURES} failures"
+}
 
 HOST=""
 LAST_OK=0
@@ -179,6 +264,7 @@ while IFS= read -r line; do
         *"Tunnel not found"*)
             write_status "state=reaped url=${HOST:--} age=-"
             log "reaped by Cloudflare; exiting so a new hostname is assigned"
+            stop_watchdog
             forward
             exit 75
             ;;
@@ -203,6 +289,8 @@ while IFS= read -r line; do
                 LAST_OK=$(now)
                 set_state registered
                 log "published $HOST"
+                # Started once, and only once a URL exists to probe.
+                [ -n "$WATCHDOG_PID" ] || start_watchdog
             fi
             continue
             ;;
@@ -217,14 +305,7 @@ while IFS= read -r line; do
     case "$line" in
         *"Connection registered"*|*"Registered tunnel connection"*)
             LAST_OK=$(now)
-            if [ "$LAST_STATE" != "registered" ]; then
-                set_state registered
-                log "connection registered${HOST:+ for $HOST}"
-            else
-                # Same state; refresh the age so an operator reading the file
-                # can see how long ago the last registration was.
-                set_state registered
-            fi
+            set_state registered
             continue
             ;;
     esac
@@ -246,6 +327,7 @@ while IFS= read -r line; do
 done <&3
 
 # cloudflared exited on its own.
+stop_watchdog
 wait "$TUNNEL_PID" 2>/dev/null || true
 write_status "state=exited url=${HOST:--} age=-"
 log "cloudflared exited"
